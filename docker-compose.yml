@@ -1,0 +1,28 @@
+# minutes-service 로컬 개발용 의존 서비스.
+#   docker compose up -d   → 이후 ./gradlew bootRun --args='--spring.profiles.active=local'
+# user-service(토큰 공개키, 사용자 이름)·workspace-service(폴더 권한)도 함께 띄워야 한다. 여러 서비스를 함께 띄우는 것은 nineouting-docs/integration에서 한다.
+# 주의: Kafka가 9092를 쓰므로 user-service의 compose와 동시에 띄우면 Kafka가 겹친다. 하나만 띄워 함께 쓴다.
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: minutes_db
+      MYSQL_USER: ${DB_USERNAME:-minutes_service}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-minutes_service}
+    ports:
+      - "3311:3306"   # user(3307)·workspace(3308)·notification(3309)·meeting(3310)과 겹치지 않게
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.9.1   # KRaft 단일 브로커, localhost:9092
+    ports:
+      - "9092:9092"
+
+volumes:
+  mysql-data:

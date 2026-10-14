@@ -1,0 +1,80 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.nineouting.backend'
+version = '0.0.1'
+
+ext {
+    commonVersion = '0.4.0'
+    jjwtVersion = '0.12.6'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+    // 공통 모듈(nineouting-common) — GitHub Packages는 public이어도 읽을 때 토큰이 필요하다.
+    //  - CI: GITHUB_ACTOR + GPR_TOKEN (조직 시크릿, read:packages)
+    //  - 로컬: ~/.gradle/gradle.properties 의 gpr.user / gpr.key
+    maven {
+        url = uri('https://maven.pkg.github.com/nineOuting/nineouting-common')
+        credentials {
+            username = System.getenv('GITHUB_ACTOR') ?: findProperty('gpr.user')
+            password = System.getenv('GPR_TOKEN') ?: findProperty('gpr.key')
+        }
+    }
+}
+
+dependencies {
+    implementation "com.nineouting.backend:web-common:${commonVersion}"
+    implementation "com.nineouting.backend:observability:${commonVersion}"
+    implementation "com.nineouting.backend:security-common:${commonVersion}"
+    implementation "com.nineouting.backend:outbox:${commonVersion}"
+    implementation "com.nineouting.backend:inbox:${commonVersion}"
+    implementation "com.nineouting.backend:event-contract:${commonVersion}"
+    implementation "com.nineouting.backend:client-common:${commonVersion}"
+
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-kafka'
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-mysql'
+    runtimeOnly 'com.mysql:mysql-connector-j'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-mysql'
+    testImplementation 'org.testcontainers:testcontainers-kafka'
+    testImplementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+    testRuntimeOnly "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+    testRuntimeOnly "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.named('jar') {
+    enabled = false
+}
