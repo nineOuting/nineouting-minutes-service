@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 회의록 양식 관리 (REQ-106~108) */
+/** 회의록 양식 관리 (REQ-107~109) */
 @RestController
 @RequestMapping("/api/minutes-templates")
 @RequiredArgsConstructor

@@ -44,7 +44,7 @@ public class MinutesController {
         return ApiResponse.ok(minutesService.selectTemplate(minutesId, user.userId(), request.templateId()));
     }
 
-    /** REQ-093, 109 */
+    /** REQ-093, 110 */
     @PutMapping("/api/minutes/{minutesId}/sections")
     public ApiResponse<MinutesDetailResponse> saveSections(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
                                                            @Valid @RequestBody SaveSectionsRequest request) {
