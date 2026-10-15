@@ -5,6 +5,7 @@ on:
     branches: [dev, stage, main]
   push:
     branches: [dev, stage]
+  workflow_dispatch:   # Actions 화면에서 직접 실행
 
 permissions:
   contents: read
