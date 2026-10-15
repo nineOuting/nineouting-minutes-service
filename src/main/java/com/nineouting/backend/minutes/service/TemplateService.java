@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 회의록 양식 관리 (REQ-106~108). 개인 양식 + 기본 양식 1개 (8장 결정 5).
+ * 회의록 양식 관리 (REQ-107~109). 개인 양식 + 기본 양식 1개 (8장 결정 5).
  * 양식을 고치거나 지워도 이미 만든 회의록의 칸은 그대로다.
  */
 @Service
