@@ -1,5 +1,6 @@
 package com.nineouting.backend.minutes.config;
 
+import com.nineouting.backend.common.apidocs.ApiDocsPaths;
 import com.nineouting.backend.common.security.handler.JsonAccessDeniedHandler;
 import com.nineouting.backend.common.security.handler.JsonAuthenticationEntryPoint;
 import com.nineouting.backend.common.security.jwt.JwtAuthenticationFilter;
@@ -30,6 +31,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_PATHS).permitAll()
+                        .requestMatchers(ApiDocsPaths.PUBLIC).permitAll()   // API 문서 (Swagger UI)
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(e -> e.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDeniedHandler))

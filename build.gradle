@@ -8,7 +8,7 @@ group = 'com.nineouting.backend'
 version = '0.0.1'
 
 ext {
-    commonVersion = '0.4.0'
+    commonVersion = '0.5.0'
     jjwtVersion = '0.12.6'
 }
 
@@ -34,6 +34,7 @@ repositories {
 
 dependencies {
     implementation "com.nineouting.backend:web-common:${commonVersion}"
+    implementation "com.nineouting.backend:api-docs:${commonVersion}"
     implementation "com.nineouting.backend:observability:${commonVersion}"
     implementation "com.nineouting.backend:security-common:${commonVersion}"
     implementation "com.nineouting.backend:outbox:${commonVersion}"
