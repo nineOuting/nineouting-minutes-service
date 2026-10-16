@@ -30,9 +30,9 @@ class ArchiveTest extends ApiTestSupport {
 
     @Test
     void 확정된_회의록만_검색어_기간_태그_참석자로_찾는다() throws Exception {
-        Long deploy = confirmed("배포 회의", LocalDateTime.of(2026, 10, 5, 10, 0), "서버 배포 일정을 정했다", attendee);
+        Long deploy = confirmed("배포 회의", LocalDateTime.of(2026, 10, 5, 10, 0), "서버 배포 일정을 정했다 (API 서버)", attendee);
         Long budget = confirmed("예산 회의", LocalDateTime.of(2026, 10, 15, 10, 0), "광고 예산을 승인했다");
-        call(writer, put("/api/minutes/" + deploy + "/tags"), "{\"tags\":[\"개발\"]}");
+        call(writer, put("/api/minutes/" + deploy + "/tags"), "{\"tags\":[\"개발\",\"Backend\"]}");
         Long writing = finishMeeting(newId(), folderId, "배포 준비", LocalDateTime.of(2026, 10, 25, 10, 0), writer, writer);
         writeContent(writing, writer, "아직 작성 중인 배포 내용");
 
@@ -44,11 +44,15 @@ class ArchiveTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data.items[*].minutesId", contains(budget.intValue())));
         archive(folderMember).param("q", "광")
                 .andExpect(jsonPath("$.data.items[*].minutesId", contains(budget.intValue())));
+        archive(folderMember).param("q", "api")   // 대소문자를 구분하지 않는다
+                .andExpect(jsonPath("$.data.items[*].minutesId", contains(deploy.intValue())));
         archive(folderMember).param("from", "2026-10-10").param("to", "2026-10-31")
                 .andExpect(jsonPath("$.data.items[*].minutesId", contains(budget.intValue())));
         archive(folderMember).param("tag", "개발")
-                .andExpect(jsonPath("$.data.items[0].tags", contains("개발")))
+                .andExpect(jsonPath("$.data.items[0].tags", contains("개발", "Backend")))
                 .andExpect(jsonPath("$.data.totalCount").value(1));
+        archive(folderMember).param("tag", "backend")
+                .andExpect(jsonPath("$.data.items[*].minutesId", contains(deploy.intValue())));
         archive(folderMember).param("attendeeId", attendee.toString()).param("q", "배포")
                 .andExpect(jsonPath("$.data.items[*].minutesId", contains(deploy.intValue())));
         archive(folderMember).param("size", "1")

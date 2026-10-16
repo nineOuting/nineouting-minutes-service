@@ -23,7 +23,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # 테스트는 Testcontainers로 MySQL·Kafka를 띄운다 (GitHub 러너에 Docker가 있다).
+      # 테스트는 Testcontainers로 PostgreSQL·Kafka를 띄운다 (GitHub 러너에 Docker가 있다).
       - name: Build
         run: ./gradlew build --no-daemon --console=plain
         env:

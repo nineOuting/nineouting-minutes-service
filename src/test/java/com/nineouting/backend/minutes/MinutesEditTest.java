@@ -121,6 +121,9 @@ class MinutesEditTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data", contains("배포", "예산")));
         call(writer, get("/api/minutes/" + minutesId), null)
                 .andExpect(jsonPath("$.data.tags", contains("배포", "예산")));
+        // 대소문자만 다른 태그는 같은 태그로 보고 처음 것만 남긴다
+        call(writer, put("/api/minutes/" + minutesId + "/tags"), "{\"tags\":[\"AI\",\"ai\",\"Ai\"]}")
+                .andExpect(jsonPath("$.data", contains("AI")));
         call(writer, put("/api/minutes/" + minutesId + "/tags"),
                 "{\"tags\":[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\",\"7\",\"8\",\"9\",\"10\",\"11\"]}")
                 .andExpect(jsonPath("$.code").value("TOO_MANY_TAGS"));

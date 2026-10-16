@@ -30,7 +30,7 @@ public class MinutesSection {
     @Column(nullable = false, length = 100)
     private String title;
 
-    @Column(nullable = false, columnDefinition = "MEDIUMTEXT")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
     public MinutesSection(Long minutesId, int position, String title, String content) {

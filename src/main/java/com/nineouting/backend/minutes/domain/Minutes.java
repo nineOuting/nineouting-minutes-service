@@ -66,8 +66,8 @@ public class Minutes extends BaseTimeEntity {
     @Column(name = "confirmed_by_user_id")
     private Long confirmedByUserId;
 
-    /** 검색용: 회의명 + 모든 칸 제목·내용 (FULLTEXT ngram) */
-    @Column(name = "search_text", nullable = false, columnDefinition = "MEDIUMTEXT")
+    /** 검색용: 회의명 + 모든 칸 제목·내용 (pg_trgm 인덱스) */
+    @Column(name = "search_text", nullable = false, columnDefinition = "TEXT")
     private String searchText;
 
     public Minutes(Long meetingId, Long workspaceId, Long folderId, String title, LocalDateTime meetingStartAt,

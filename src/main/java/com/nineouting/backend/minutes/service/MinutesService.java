@@ -31,8 +31,10 @@ import com.nineouting.backend.minutes.repository.TemplateRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -160,15 +162,16 @@ public class MinutesService {
                 .toList();
     }
 
-    /** REQ-053. 작성자만. 앞뒤 공백·중복을 지우고 최대 10개, 태그마다 20자 */
+    /** REQ-053. 작성자만. 앞뒤 공백·중복(대소문자 무시, 처음 것만 남김)을 지우고 최대 10개, 태그마다 20자 */
     @Transactional
     public List<String> setTags(Long minutesId, Long userId, List<String> requested) {
         Minutes minutes = access.require(minutesId);
         access.requireWriter(minutes, userId);
+        Set<String> seen = new HashSet<>();
         List<String> tags = requested.stream()
                 .filter(tag -> tag != null && !tag.isBlank())
                 .map(String::trim)
-                .distinct()
+                .filter(tag -> seen.add(tag.toLowerCase(Locale.ROOT)))
                 .toList();
         if (tags.size() > MAX_TAGS) {
             throw new BusinessException(MinutesErrorCode.TOO_MANY_TAGS);

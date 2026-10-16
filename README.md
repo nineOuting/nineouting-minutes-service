@@ -13,7 +13,7 @@
 필요한 것: JDK 21, Docker, 실행 중인 user-service(8081)·workspace-service(8082)
 
 1. `~/.gradle/gradle.properties`에 `gpr.user`, `gpr.key`(read:packages 토큰)
-2. `docker compose up -d` — MySQL(`localhost:3311`), Kafka(`localhost:9092`)
+2. `docker compose up -d` — PostgreSQL(`localhost:5437`), Kafka(`localhost:9092`)
 3. `./gradlew bootRun --args='--spring.profiles.active=local'`
 
 ## API
@@ -53,7 +53,7 @@ PDF 다운로드(REQ-101)는 프론트에서 만든다.
 ## 테스트
 
 ```bash
-./gradlew test   # Testcontainers로 MySQL·Kafka를 띄운다. user·workspace-service는 가짜로 바꾼다
+./gradlew test   # Testcontainers로 PostgreSQL·Kafka를 띄운다. user·workspace-service는 가짜로 바꾼다
 ```
 
 ## 환경 변수
@@ -61,7 +61,7 @@ PDF 다운로드(REQ-101)는 프론트에서 만든다.
 | 이름 | 기본값 | 설명 |
 |------|--------|------|
 | `SERVER_PORT` | `8084` | |
-| `DB_URL` | `jdbc:mysql://localhost:3311/minutes_db` | |
+| `DB_URL` | `jdbc:postgresql://localhost:5437/minutes_db` | |
 | `DB_USERNAME` / `DB_PASSWORD` | `minutes_service` | |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | |
 | `JWT_JWKS_URI` | `http://localhost:8081/.well-known/jwks.json` | access 토큰 검증 공개키 |
