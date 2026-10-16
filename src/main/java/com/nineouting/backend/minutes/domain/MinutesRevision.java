@@ -36,7 +36,7 @@ public class MinutesRevision {
     @Column(name = "edited_at", nullable = false)
     private LocalDateTime editedAt;
 
-    @Column(nullable = false, columnDefinition = "MEDIUMTEXT")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String snapshot;
 
     /** 확정 후 수정 (REQ-110) */

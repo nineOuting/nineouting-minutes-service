@@ -11,14 +11,12 @@ import org.springframework.stereotype.Repository;
 
 /**
  * 아카이브 검색·필터 (REQ-051~054). 확정된 회의록만, 회의 날짜 최신순.
- * 검색어는 FULLTEXT(ngram, 2글자 단위) 인덱스로 찾고, 1글자면 LIKE로 찾는다.
+ * 검색어는 대소문자를 구분하지 않는 부분 일치(ILIKE)로 찾는다. 글자 3개 단위 인덱스(pg_trgm)가 받쳐 준다.
+ * 태그도 대소문자를 구분하지 않는다.
  */
 @Repository
 @RequiredArgsConstructor
 public class MinutesSearchRepository {
-
-    /** ngram 파서가 자르는 글자 수 (MySQL 기본값) */
-    private static final int NGRAM_TOKEN_SIZE = 2;
 
     private final EntityManager entityManager;
 
@@ -56,14 +54,8 @@ public class MinutesSearchRepository {
         params.put("folderId", filter.folderId());
         if (filter.query() != null && !filter.query().isBlank()) {
             String query = filter.query().trim();
-            if (query.length() < NGRAM_TOKEN_SIZE) {
-                sql.append(" and m.search_text like :like");
-                params.put("like", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
-            } else {
-                // 따옴표로 감싸 한 덩어리(구문)로 찾는다. 검색어 안의 따옴표는 지운다
-                sql.append(" and match(m.search_text) against (:query in boolean mode)");
-                params.put("query", "\"" + query.replace("\"", "") + "\"");
-            }
+            sql.append(" and m.search_text ilike :like");
+            params.put("like", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
         }
         if (filter.from() != null) {
             sql.append(" and m.meeting_start_at >= :from");
@@ -74,7 +66,7 @@ public class MinutesSearchRepository {
             params.put("to", filter.to().plusDays(1).atStartOfDay());
         }
         if (filter.tag() != null && !filter.tag().isBlank()) {
-            sql.append(" and exists (select 1 from minutes_tags t where t.minutes_id = m.id and t.tag = :tag)");
+            sql.append(" and exists (select 1 from minutes_tags t where t.minutes_id = m.id and lower(t.tag) = lower(:tag))");
             params.put("tag", filter.tag().trim());
         }
         if (filter.attendeeId() != null) {
