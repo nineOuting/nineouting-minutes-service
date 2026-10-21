@@ -1,6 +1,6 @@
 package com.nineouting.backend.minutes.domain;
 
-/** 참석자별 검토 현황 (REQ-098) */
+/** 참석자별 검토 현황 (REQ-109) */
 public enum ReviewStatus {
     /** 미확인 */
     PENDING,

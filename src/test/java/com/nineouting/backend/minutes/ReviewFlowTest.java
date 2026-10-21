@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** 검토 요청 → 코멘트·동의 → 확정, 확정 후 수정 (REQ-095~099, 110) */
+/** 검토 요청 → 코멘트·동의 → 확정, 확정 후 수정 (REQ-106~111) */
 class ReviewFlowTest extends ApiTestSupport {
 
     private static final LocalDateTime START = LocalDateTime.of(2026, 10, 20, 14, 0);

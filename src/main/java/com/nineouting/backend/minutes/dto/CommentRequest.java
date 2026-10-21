@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** 검토 코멘트 (REQ-097): 칸에서 고른 문장(quote)과 의견(body) */
+/** 검토 코멘트 (REQ-108): 칸에서 고른 문장(quote)과 의견(body) */
 public record CommentRequest(
         @NotNull(message = "칸을 선택해 주세요") Long sectionId,
         @NotBlank(message = "수정할 문장을 선택해 주세요")

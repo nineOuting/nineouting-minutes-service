@@ -10,7 +10,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 아카이브 태그 (REQ-053). 회의록 작성자가 자유롭게 붙인다 */
+/** 아카이브 태그 (REQ-055). 회의록 작성자가 자유롭게 붙인다 */
 @Getter
 @Entity
 @Table(name = "minutes_tags")

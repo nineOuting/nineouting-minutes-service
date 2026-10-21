@@ -13,8 +13,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * meeting-service 이벤트.
  * <ul>
- *   <li>MeetingFinished (REQ-087): 작성 중인 회의록을 만든다</li>
- *   <li>MeetingMoved (REQ-043): 회의록의 폴더를 바꾼다. 아직 회의록이 없으면(회의가 끝나기 전) 할 일이 없다</li>
+ *   <li>MeetingFinished (REQ-098): 작성 중인 회의록을 만든다</li>
+ *   <li>MeetingMoved (REQ-045): 회의록의 폴더를 바꾼다. 아직 회의록이 없으면(회의가 끝나기 전) 할 일이 없다</li>
  * </ul>
  */
 @Component

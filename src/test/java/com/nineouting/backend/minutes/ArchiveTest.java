@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** 아카이브 검색·필터·즐겨찾기 (REQ-051~054), 홈 검토 대기·최근 확정 (REQ-021~023, 026~027) */
+/** 아카이브 검색·필터·즐겨찾기 (REQ-053~056), 홈 검토 대기·최근 확정 (REQ-021~023, 026~027) */
 class ArchiveTest extends ApiTestSupport {
 
     private Long writer;

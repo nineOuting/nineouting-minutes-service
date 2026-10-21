@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * REQ-115: 폴더(하위 폴더 포함)가 지워지면 그 안의 회의록과 딸린 데이터를 모두 지운다.
+ * REQ-058: 폴더(하위 폴더 포함)가 지워지면 그 안의 회의록과 딸린 데이터를 모두 지운다.
  * ai-service 챗봇 복사본 삭제는 2차 (챗봇 동기화).
  */
 @Component
