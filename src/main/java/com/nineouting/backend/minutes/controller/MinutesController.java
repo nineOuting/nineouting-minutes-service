@@ -31,33 +31,33 @@ public class MinutesController {
         return ApiResponse.ok(minutesService.getByMeeting(meetingId, user.userId()));
     }
 
-    /** REQ-051 */
+    /** REQ-053 */
     @GetMapping("/api/minutes/{minutesId}")
     public ApiResponse<MinutesDetailResponse> get(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         return ApiResponse.ok(minutesService.get(minutesId, user.userId()));
     }
 
-    /** REQ-089 */
+    /** REQ-100 */
     @PutMapping("/api/minutes/{minutesId}/template")
     public ApiResponse<MinutesDetailResponse> selectTemplate(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
                                                              @Valid @RequestBody SelectTemplateRequest request) {
         return ApiResponse.ok(minutesService.selectTemplate(minutesId, user.userId(), request.templateId()));
     }
 
-    /** REQ-093, 110 */
+    /** REQ-104, 111 */
     @PutMapping("/api/minutes/{minutesId}/sections")
     public ApiResponse<MinutesDetailResponse> saveSections(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
                                                            @Valid @RequestBody SaveSectionsRequest request) {
         return ApiResponse.ok(minutesService.saveSections(minutesId, user.userId(), request.version(), request.sections()));
     }
 
-    /** REQ-093 */
+    /** REQ-104 */
     @GetMapping("/api/minutes/{minutesId}/revisions")
     public ApiResponse<List<RevisionResponse>> revisions(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         return ApiResponse.ok(minutesService.revisions(minutesId, user.userId()));
     }
 
-    /** REQ-053 */
+    /** REQ-055 */
     @PutMapping("/api/minutes/{minutesId}/tags")
     public ApiResponse<List<String>> tags(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
                                           @Valid @RequestBody TagsRequest request) {

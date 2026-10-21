@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
-/** 양식 저장·편집 (REQ-108, 109). 항목 순서 = 배열 순서 */
+/** 양식 저장·편집 (REQ-120~121). 항목 순서 = 배열 순서 */
 public record TemplateRequest(
         @NotBlank(message = "양식 이름을 입력해 주세요")
         @Size(max = 50, message = "양식 이름은 50자 이하로 입력해 주세요")

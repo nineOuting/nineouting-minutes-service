@@ -33,7 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 참석자 검토 요청·동의·코멘트·검토 현황, 확정 (REQ-095~099).
+ * 참석자 검토 요청·동의·코멘트·검토 현황, 확정 (REQ-106~110).
  */
 @Service
 @RequiredArgsConstructor
@@ -49,7 +49,7 @@ public class ReviewService {
     private final Clock clock;
 
     /**
-     * REQ-095, 097. 작성자, 확정 전. 참석자(작성자 제외)의 검토를 모두 미확인으로 되돌린다 (8장 결정 2).
+     * REQ-106, 108. 작성자, 확정 전. 참석자(작성자 제외)의 검토를 모두 미확인으로 되돌린다 (8장 결정 2).
      * 검토할 참석자가 없으면(작성자 혼자) 바로 확정한다.
      */
     @Transactional
@@ -80,7 +80,7 @@ public class ReviewService {
                         minutes.getWriterUserId(), reviewers));
     }
 
-    /** REQ-098. 참석자별 동의·미확인·수정 요청 */
+    /** REQ-109. 참석자별 동의·미확인·수정 요청 */
     @Transactional(readOnly = true)
     public List<ReviewResponse> reviews(Long minutesId, Long userId) {
         Minutes minutes = access.require(minutesId);
@@ -93,7 +93,7 @@ public class ReviewService {
                 .toList();
     }
 
-    /** REQ-096, 099. 검토 대상 참석자, 검토 중. 모두 동의하면 자동 확정 */
+    /** REQ-107, 110. 검토 대상 참석자, 검토 중. 모두 동의하면 자동 확정 */
     @Transactional
     public void approve(Long minutesId, Long userId) {
         Minutes minutes = access.requireForUpdate(minutesId);
@@ -106,7 +106,7 @@ public class ReviewService {
         }
     }
 
-    /** REQ-097. 검토 대상 참석자, 검토 중. 고른 문장에 의견을 남기면 내 검토는 수정 요청이 된다 */
+    /** REQ-108. 검토 대상 참석자, 검토 중. 고른 문장에 의견을 남기면 내 검토는 수정 요청이 된다 */
     @Transactional
     public CommentResponse comment(Long minutesId, Long userId, CommentRequest request) {
         Minutes minutes = access.requireForUpdate(minutesId);
@@ -130,7 +130,7 @@ public class ReviewService {
         return comments.stream().map(comment -> toResponse(comment, users)).toList();
     }
 
-    /** REQ-097. 작성자가 코멘트를 반영했다고 표시 */
+    /** REQ-108. 작성자가 코멘트를 반영했다고 표시 */
     @Transactional
     public void resolveComment(Long minutesId, Long commentId, Long userId) {
         Minutes minutes = access.require(minutesId);
@@ -141,7 +141,7 @@ public class ReviewService {
         comment.resolve(LocalDateTime.now(clock));
     }
 
-    /** REQ-096. 작성자, 검토 중. 동의하지 않은 참석자가 있어도 확정할 수 있다 */
+    /** REQ-107. 작성자, 검토 중. 동의하지 않은 참석자가 있어도 확정할 수 있다 */
     @Transactional
     public void confirmByWriter(Long minutesId, Long userId) {
         Minutes minutes = access.requireForUpdate(minutesId);
@@ -155,7 +155,7 @@ public class ReviewService {
         confirm(minutes, userId);
     }
 
-    /** REQ-099, 100. 확정하고 참석자 알림·메일·회의 목록 표시용 이벤트를 남긴다 */
+    /** REQ-110, 112. 확정하고 참석자 알림·메일·회의 목록 표시용 이벤트를 남긴다 */
     private void confirm(Minutes minutes, Long confirmedByUserId) {
         LocalDateTime now = LocalDateTime.now(clock);
         minutes.confirm(now, confirmedByUserId);

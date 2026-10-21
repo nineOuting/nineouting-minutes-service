@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 
-/** 회의록 양식 관리 (REQ-107~109) */
+/** 회의록 양식 관리 (REQ-119~121) */
 class TemplateTest extends ApiTestSupport {
 
     @Test

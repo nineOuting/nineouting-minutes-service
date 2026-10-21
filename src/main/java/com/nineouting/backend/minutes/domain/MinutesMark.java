@@ -10,7 +10,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 즐겨찾기·중요 표시 (REQ-054). 둘 다 개인 표시라 사용자마다 따로 저장한다 */
+/** 즐겨찾기·중요 표시 (REQ-056). 둘 다 개인 표시라 사용자마다 따로 저장한다 */
 @Getter
 @Entity
 @Table(name = "minutes_marks")

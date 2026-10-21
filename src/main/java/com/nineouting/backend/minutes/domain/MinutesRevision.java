@@ -12,7 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 수정 기록 (REQ-093, 110). 저장할 때마다 전체 내용(칸 제목·내용 JSON)과 수정한 사람·시각을 남긴다.
+ * 수정 기록 (REQ-104, 111). 저장할 때마다 전체 내용(칸 제목·내용 JSON)과 수정한 사람·시각을 남긴다.
  */
 @Getter
 @Entity
@@ -39,7 +39,7 @@ public class MinutesRevision {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String snapshot;
 
-    /** 확정 후 수정 (REQ-110) */
+    /** 확정 후 수정 (REQ-111) */
     @Column(name = "after_confirm", nullable = false)
     private boolean afterConfirm;
 

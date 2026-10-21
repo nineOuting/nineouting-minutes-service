@@ -12,7 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 회의록 양식 (REQ-107~109). ownerUserId가 없으면 기본 양식(누구나 고를 수 있고 고칠 수 없음).
+ * 회의록 양식 (REQ-119~121). ownerUserId가 없으면 기본 양식(누구나 고를 수 있고 고칠 수 없음).
  */
 @Getter
 @Entity

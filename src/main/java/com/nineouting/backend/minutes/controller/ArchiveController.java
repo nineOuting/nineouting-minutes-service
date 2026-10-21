@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 아카이브(REQ-051~054)와 홈(REQ-021~023, 026~027) */
+/** 아카이브(REQ-053~056)와 홈(REQ-021~023, 026~027) */
 @RestController
 @RequiredArgsConstructor
 public class ArchiveController {
@@ -29,7 +29,7 @@ public class ArchiveController {
 
     private final ArchiveService archiveService;
 
-    /** REQ-051~054. q: 회의명·내용, from·to: 회의 날짜, tag, attendeeId, mark: FAVORITE / IMPORTANT */
+    /** REQ-053~056. q: 회의명·내용, from·to: 회의 날짜, tag, attendeeId, mark: FAVORITE / IMPORTANT */
     @GetMapping("/api/folders/{folderId}/minutes")
     public ApiResponse<ArchivePageResponse> folderMinutes(@CurrentUser AuthenticatedUser user, @PathVariable Long folderId,
                                                           @RequestParam(required = false) String q,
@@ -44,7 +44,7 @@ public class ArchiveController {
                 page, size));
     }
 
-    /** REQ-054 */
+    /** REQ-056 */
     @PutMapping("/api/minutes/{minutesId}/marks")
     public ApiResponse<Void> mark(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
                                   @RequestBody MarksRequest request) {
@@ -58,7 +58,7 @@ public class ArchiveController {
         return ApiResponse.ok(archiveService.reviewRequests(user.userId()));
     }
 
-    /** REQ-026, 027 */
+    /** REQ-026~027 */
     @GetMapping("/api/users/me/recent-minutes")
     public ApiResponse<List<RecentMinutesResponse>> recent(@CurrentUser AuthenticatedUser user,
                                                            @RequestParam(defaultValue = DEFAULT_RECENT_SIZE) int size) {

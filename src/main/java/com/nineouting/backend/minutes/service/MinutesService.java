@@ -68,7 +68,7 @@ public class MinutesService {
     private final JsonMapper jsonMapper;
     private final Clock clock;
 
-    /** 회의 마무리(REQ-087)를 받아 작성 중인 회의록을 만든다. 같은 회의는 한 번만 만든다. */
+    /** 회의 마무리(REQ-098)를 받아 작성 중인 회의록을 만든다. 같은 회의는 한 번만 만든다. */
     @Transactional
     public void createFromMeeting(MeetingFinished event) {
         if (minutesRepository.existsByMeetingId(event.meetingId())) {
@@ -97,7 +97,7 @@ public class MinutesService {
         return detail(minutes, userId);
     }
 
-    /** REQ-089. 작성자, 작성 중에만. 칸을 양식 항목대로 다시 만든다 (내용은 비운다). */
+    /** REQ-100. 작성자, 작성 중에만. 칸을 양식 항목대로 다시 만든다 (내용은 비운다). */
     @Transactional
     public MinutesDetailResponse selectTemplate(Long minutesId, Long userId, Long templateId) {
         Minutes minutes = access.requireForUpdate(minutesId);
@@ -119,7 +119,7 @@ public class MinutesService {
     }
 
     /**
-     * REQ-093, 110. 작성자만, 작성 중·검토 중·확정 모두 가능 (확정 후에는 다시 검토하지 않는다).
+     * REQ-104, 111. 작성자만, 작성 중·검토 중·확정 모두 가능 (확정 후에는 다시 검토하지 않는다).
      * 요청의 version이 지금과 다르면 다른 곳에서 먼저 저장한 것이므로 거절한다.
      */
     @Transactional
@@ -148,7 +148,7 @@ public class MinutesService {
         return detail(minutes, userId);
     }
 
-    /** REQ-093. 수정한 사람·시각 (최근 순) */
+    /** REQ-104. 수정한 사람·시각 (최근 순) */
     @Transactional(readOnly = true)
     public List<RevisionResponse> revisions(Long minutesId, Long userId) {
         Minutes minutes = access.require(minutesId);
@@ -162,7 +162,7 @@ public class MinutesService {
                 .toList();
     }
 
-    /** REQ-053. 작성자만. 앞뒤 공백·중복(대소문자 무시, 처음 것만 남김)을 지우고 최대 10개, 태그마다 20자 */
+    /** REQ-055. 작성자만. 앞뒤 공백·중복(대소문자 무시, 처음 것만 남김)을 지우고 최대 10개, 태그마다 20자 */
     @Transactional
     public List<String> setTags(Long minutesId, Long userId, List<String> requested) {
         Minutes minutes = access.require(minutesId);

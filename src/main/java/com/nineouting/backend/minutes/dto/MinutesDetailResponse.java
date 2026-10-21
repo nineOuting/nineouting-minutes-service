@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 회의록 상세 (REQ-051, 093).
+ * 회의록 상세 (REQ-053, 104).
  *
  * @param version           내용을 저장할 때 그대로 돌려보낸다
  * @param confirmedByUserId 작성자가 확정했으면 작성자, 전원 동의로 자동 확정됐으면 null
