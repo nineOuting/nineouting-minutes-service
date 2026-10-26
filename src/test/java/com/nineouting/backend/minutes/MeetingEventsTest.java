@@ -37,10 +37,11 @@ class MeetingEventsTest extends ApiTestSupport {
         Long meetingId = newId();
 
         publish(MeetingFinished.TOPIC, MeetingFinished.TYPE, new MeetingFinished(meetingId, workspaceId, from, "주간 회의",
-                LocalDateTime.of(2026, 10, 20, 14, 0), writer, List.of(writer)));
+                LocalDateTime.of(2026, 10, 20, 14, 0), "3층 회의실", writer, List.of(writer)));
         await(writer, meetingId, status -> status == 200);
         call(writer, get("/api/meetings/" + meetingId + "/minutes"), null)
                 .andExpect(jsonPath("$.data.title").value("주간 회의"))
+                .andExpect(jsonPath("$.data.location").value("3층 회의실"))
                 .andExpect(jsonPath("$.data.folderId").value(from));
 
         publish(MeetingMoved.TOPIC, MeetingMoved.TYPE, new MeetingMoved(meetingId, workspaceId, from, to));

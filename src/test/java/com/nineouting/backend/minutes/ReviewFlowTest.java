@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.nineouting.backend.common.event.minutes.MinutesConfirmed;
+import com.nineouting.backend.common.event.minutes.MinutesEdited;
 import com.nineouting.backend.common.event.minutes.MinutesReviewRequested;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,12 +99,17 @@ class ReviewFlowTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data.confirmedByUserId").value(writer))
                 .andReturn().getResponse().getContentAsString();
         int version = com.jayway.jsonpath.JsonPath.read(detail, "$.data.version");
+        assertThat(outboxContains(MinutesEdited.TYPE, "\"minutesId\":" + minutesId + ",")).isFalse();
         call(writer, put("/api/minutes/" + minutesId + "/sections"),
                 "{\"version\":%d,\"sections\":[{\"title\":\"정정\",\"content\":\"날짜 수정\"}]}".formatted(version))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CONFIRMED"));
         call(first, get("/api/minutes/" + minutesId + "/revisions"), null)
                 .andExpect(jsonPath("$.data[0].afterConfirm").value(true));
+        // REQ-111. 확정 후 수정은 참석자에게 알린다
+        assertThat(outboxContains(MinutesEdited.TYPE,
+                "\"minutesId\":%d,".formatted(minutesId))).isTrue();
+        assertThat(outboxContains(MinutesEdited.TYPE, "\"editorUserId\":%d,".formatted(writer))).isTrue();
     }
 
     @Test

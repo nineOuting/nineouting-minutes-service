@@ -109,6 +109,6 @@ class MinutesDomainTest {
     }
 
     private static Minutes minutes() {
-        return new Minutes(31L, 3L, 4L, "주간 회의", NOW.minusDays(1), WRITER);
+        return new Minutes(31L, 3L, 4L, "주간 회의", NOW.minusDays(1), "3층 회의실", WRITER);
     }
 }

@@ -32,7 +32,7 @@ class MinutesEditTest extends ApiTestSupport {
     }
 
     @Test
-    void 회의가_끝나기_전에는_준비_중이고_확정_전에는_참석자만_본다() throws Exception {
+    void 회의가_끝나기_전에는_준비_중이고_폴더_멤버는_확정_전에도_본다() throws Exception {
         Long meetingId = newId();
         call(writer, get("/api/meetings/" + meetingId + "/minutes"), null)
                 .andExpect(status().isNotFound())
@@ -47,9 +47,10 @@ class MinutesEditTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data.writer.name").value("user" + writer))
                 .andExpect(jsonPath("$.data.attendees[*].userId", contains(writer.intValue(), attendee.intValue())))
                 .andExpect(jsonPath("$.data.sections.length()").value(0));
+        // REQ-053. 본인이 속한 폴더의 회의록이면 참석하지 않았고 확정 전이어도 볼 수 있다
         call(folderMember, get("/api/minutes/" + minutesId), null)
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("NOT_MINUTES_ATTENDEE"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WRITING"));
         call(outsider, get("/api/minutes/" + minutesId), null)
                 .andExpect(jsonPath("$.code").value("FOLDER_ACCESS_DENIED"));
     }
@@ -113,23 +114,6 @@ class MinutesEditTest extends ApiTestSupport {
                 .andExpect(status().isConflict());
     }
 
-    @Test
-    void 작성자가_태그를_붙인다() throws Exception {
-        Long minutesId = finishMeeting(newId(), folderId, "회의", START, writer, writer);
-
-        call(writer, put("/api/minutes/" + minutesId + "/tags"), "{\"tags\":[\" 배포 \",\"배포\",\"예산\",\"\"]}")
-                .andExpect(jsonPath("$.data", contains("배포", "예산")));
-        call(writer, get("/api/minutes/" + minutesId), null)
-                .andExpect(jsonPath("$.data.tags", contains("배포", "예산")));
-        // 대소문자만 다른 태그는 같은 태그로 보고 처음 것만 남긴다
-        call(writer, put("/api/minutes/" + minutesId + "/tags"), "{\"tags\":[\"AI\",\"ai\",\"Ai\"]}")
-                .andExpect(jsonPath("$.data", contains("AI")));
-        call(writer, put("/api/minutes/" + minutesId + "/tags"),
-                "{\"tags\":[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\",\"7\",\"8\",\"9\",\"10\",\"11\"]}")
-                .andExpect(jsonPath("$.code").value("TOO_MANY_TAGS"));
-        call(writer, put("/api/minutes/" + minutesId + "/tags"), "{\"tags\":[\"%s\"]}".formatted("가".repeat(21)))
-                .andExpect(status().isBadRequest());
-    }
 
     @Test
     void 로그인하지_않으면_401이다() throws Exception {

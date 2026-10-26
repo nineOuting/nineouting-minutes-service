@@ -10,7 +10,6 @@ import com.nineouting.backend.minutes.repository.MinutesRepository;
 import com.nineouting.backend.minutes.repository.MinutesReviewRepository;
 import com.nineouting.backend.minutes.repository.MinutesRevisionRepository;
 import com.nineouting.backend.minutes.repository.MinutesSectionRepository;
-import com.nineouting.backend.minutes.repository.MinutesTagRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -31,7 +30,6 @@ public class FolderDeletedHandler implements InboxHandler {
     private final MinutesRevisionRepository revisionRepository;
     private final MinutesReviewRepository reviewRepository;
     private final MinutesCommentRepository commentRepository;
-    private final MinutesTagRepository tagRepository;
     private final MinutesMarkRepository markRepository;
 
     @Override
@@ -54,7 +52,6 @@ public class FolderDeletedHandler implements InboxHandler {
         revisionRepository.deleteByMinutesIdIn(minutesIds);
         reviewRepository.deleteByMinutesIdIn(minutesIds);
         commentRepository.deleteByMinutesIdIn(minutesIds);
-        tagRepository.deleteByMinutesIdIn(minutesIds);
         markRepository.deleteByMinutesIdIn(minutesIds);
         minutesRepository.deleteAllByIdIn(minutesIds);
     }

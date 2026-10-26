@@ -29,18 +29,18 @@ public class ArchiveController {
 
     private final ArchiveService archiveService;
 
-    /** REQ-053~056. q: 회의명·내용, from·to: 회의 날짜, tag, attendeeId, mark: FAVORITE / IMPORTANT */
+    /** REQ-053~056. q: 회의명·내용, from·to: 회의 날짜, location: 장소(일부만 맞아도 됨), attendeeId, mark: FAVORITE / IMPORTANT */
     @GetMapping("/api/folders/{folderId}/minutes")
     public ApiResponse<ArchivePageResponse> folderMinutes(@CurrentUser AuthenticatedUser user, @PathVariable Long folderId,
                                                           @RequestParam(required = false) String q,
                                                           @RequestParam(required = false) LocalDate from,
                                                           @RequestParam(required = false) LocalDate to,
-                                                          @RequestParam(required = false) String tag,
+                                                          @RequestParam(required = false) String location,
                                                           @RequestParam(required = false) Long attendeeId,
                                                           @RequestParam(required = false) MarkFilter mark,
                                                           @RequestParam(defaultValue = "0") int page,
                                                           @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) int size) {
-        return ApiResponse.ok(archiveService.folderMinutes(folderId, user.userId(), q, from, to, tag, attendeeId, mark,
+        return ApiResponse.ok(archiveService.folderMinutes(folderId, user.userId(), q, from, to, location, attendeeId, mark,
                 page, size));
     }
 

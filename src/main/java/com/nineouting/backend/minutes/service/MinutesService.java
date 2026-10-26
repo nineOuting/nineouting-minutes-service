@@ -3,6 +3,8 @@ package com.nineouting.backend.minutes.service;
 import com.nineouting.backend.common.client.UserClient;
 import com.nineouting.backend.common.client.UserSummary;
 import com.nineouting.backend.common.event.meeting.MeetingFinished;
+import com.nineouting.backend.common.event.minutes.MinutesEdited;
+import com.nineouting.backend.common.outbox.OutboxEventWriter;
 import com.nineouting.backend.common.web.error.BusinessException;
 import com.nineouting.backend.common.web.error.CommonErrorCode;
 import com.nineouting.backend.minutes.domain.Minutes;
@@ -11,7 +13,6 @@ import com.nineouting.backend.minutes.domain.MinutesMark;
 import com.nineouting.backend.minutes.domain.MinutesRevision;
 import com.nineouting.backend.minutes.domain.MinutesSection;
 import com.nineouting.backend.minutes.domain.MinutesStatus;
-import com.nineouting.backend.minutes.domain.MinutesTag;
 import com.nineouting.backend.minutes.domain.Template;
 import com.nineouting.backend.minutes.domain.TemplateItem;
 import com.nineouting.backend.minutes.dto.MinutesDetailResponse;
@@ -25,16 +26,13 @@ import com.nineouting.backend.minutes.repository.MinutesMarkRepository;
 import com.nineouting.backend.minutes.repository.MinutesRepository;
 import com.nineouting.backend.minutes.repository.MinutesRevisionRepository;
 import com.nineouting.backend.minutes.repository.MinutesSectionRepository;
-import com.nineouting.backend.minutes.repository.MinutesTagRepository;
 import com.nineouting.backend.minutes.repository.TemplateItemRepository;
 import com.nineouting.backend.minutes.repository.TemplateRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -46,24 +44,21 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 회의록 만들기·조회, 양식 선택, 내용 저장·수정 기록, 태그.
+ * 회의록 만들기·조회, 양식 선택, 내용 저장·수정 기록.
  */
 @Service
 @RequiredArgsConstructor
 public class MinutesService {
 
-    static final int MAX_TAGS = 10;
-    static final int MAX_TAG_LENGTH = 20;
-
     private final MinutesRepository minutesRepository;
     private final MinutesAttendeeRepository attendeeRepository;
     private final MinutesSectionRepository sectionRepository;
     private final MinutesRevisionRepository revisionRepository;
-    private final MinutesTagRepository tagRepository;
     private final MinutesMarkRepository markRepository;
     private final TemplateRepository templateRepository;
     private final TemplateItemRepository templateItemRepository;
     private final MinutesAccess access;
+    private final OutboxEventWriter outboxEventWriter;
     private final UserClient userClient;
     private final JsonMapper jsonMapper;
     private final Clock clock;
@@ -75,7 +70,7 @@ public class MinutesService {
             return;
         }
         Minutes minutes = minutesRepository.save(new Minutes(event.meetingId(), event.workspaceId(), event.folderId(),
-                event.title(), event.startAt(), event.writerUserId()));
+                event.title(), event.startAt(), event.location(), event.writerUserId()));
         Set<Long> attendees = new LinkedHashSet<>(event.attendeeUserIds());
         attendees.add(event.writerUserId());
         attendees.forEach(userId -> attendeeRepository.save(new MinutesAttendee(minutes.getId(), userId)));
@@ -145,6 +140,9 @@ public class MinutesService {
         }
         sectionRepository.deleteAll(existing.values());
         recordRevision(minutes, null, sections, userId);
+        if (minutes.is(MinutesStatus.CONFIRMED)) {
+            notifyEdited(minutes, userId);
+        }
         return detail(minutes, userId);
     }
 
@@ -162,28 +160,6 @@ public class MinutesService {
                 .toList();
     }
 
-    /** REQ-055. 작성자만. 앞뒤 공백·중복(대소문자 무시, 처음 것만 남김)을 지우고 최대 10개, 태그마다 20자 */
-    @Transactional
-    public List<String> setTags(Long minutesId, Long userId, List<String> requested) {
-        Minutes minutes = access.require(minutesId);
-        access.requireWriter(minutes, userId);
-        Set<String> seen = new HashSet<>();
-        List<String> tags = requested.stream()
-                .filter(tag -> tag != null && !tag.isBlank())
-                .map(String::trim)
-                .filter(tag -> seen.add(tag.toLowerCase(Locale.ROOT)))
-                .toList();
-        if (tags.size() > MAX_TAGS) {
-            throw new BusinessException(MinutesErrorCode.TOO_MANY_TAGS);
-        }
-        if (tags.stream().anyMatch(tag -> tag.length() > MAX_TAG_LENGTH)) {
-            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "태그는 20자 이하로 입력해 주세요");
-        }
-        tagRepository.deleteByMinutesId(minutesId);
-        tags.forEach(tag -> tagRepository.save(new MinutesTag(minutesId, tag)));
-        return tags;
-    }
-
     MinutesDetailResponse detail(Minutes minutes, Long viewerId) {
         List<Long> attendeeIds = attendeeRepository.findByMinutesIdOrderById(minutes.getId()).stream()
                 .map(MinutesAttendee::getUserId)
@@ -192,15 +168,24 @@ public class MinutesService {
         Optional<MinutesMark> mark = markRepository.findByMinutesIdAndUserId(minutes.getId(), viewerId);
         return new MinutesDetailResponse(
                 minutes.getId(), minutes.getMeetingId(), minutes.getWorkspaceId(), minutes.getFolderId(),
-                minutes.getTitle(), minutes.getMeetingStartAt(), minutes.getStatus(),
+                minutes.getTitle(), minutes.getMeetingStartAt(), minutes.getLocation(), minutes.getStatus(),
                 PersonResponse.of(minutes.getWriterUserId(), users.get(minutes.getWriterUserId())),
                 attendeeIds.stream().map(id -> PersonResponse.of(id, users.get(id))).toList(),
                 minutes.getTemplateId(), minutes.getContentVersion(), minutes.getReviewRound(),
                 sectionRepository.findByMinutesIdOrderByPosition(minutes.getId()).stream().map(SectionResponse::from).toList(),
-                tagRepository.findByMinutesIdOrderById(minutes.getId()).stream().map(MinutesTag::getTag).toList(),
                 mark.map(MinutesMark::isFavorite).orElse(false),
                 mark.map(MinutesMark::isImportant).orElse(false),
                 minutes.getConfirmedAt(), minutes.getConfirmedByUserId());
+    }
+
+    /** REQ-111. 확정된 회의록을 고치면 참석자에게 알린다 (notification이 고친 사람은 뺀다) */
+    private void notifyEdited(Minutes minutes, Long editorUserId) {
+        List<Long> attendees = attendeeRepository.findByMinutesIdOrderById(minutes.getId()).stream()
+                .map(MinutesAttendee::getUserId)
+                .toList();
+        outboxEventWriter.append(MinutesEdited.TOPIC, minutes.getMeetingId().toString(), MinutesEdited.TYPE,
+                new MinutesEdited(minutes.getId(), minutes.getMeetingId(), minutes.getWorkspaceId(), minutes.getFolderId(),
+                        minutes.getTitle(), editorUserId, attendees, LocalDateTime.now(clock)));
     }
 
     /** 저장할 때마다 전체 내용과 수정한 사람·시각을 남기고, 검색용 글을 다시 만든다 (8장 결정 9) */
