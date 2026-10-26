@@ -31,6 +31,7 @@ import com.nineouting.backend.minutes.repository.TemplateRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -92,7 +93,10 @@ public class MinutesService {
         return detail(minutes, userId);
     }
 
-    /** REQ-100 (레거시). 작성자, 작성 중에만. 칸을 양식 항목대로 다시 만든다 (내용은 비운다). */
+    /**
+     * REQ-140 양식 변경 (REQ-100에서 이어짐). 작성자, 작성 중에만. 칸을 양식 항목대로 다시 만들고,
+     * 제목이 같은 칸은 쓰던 내용을 옮긴다 (나머지는 비운다).
+     */
     @Transactional
     public MinutesDetailResponse selectTemplate(Long minutesId, Long userId, Long templateId) {
         Minutes minutes = access.requireForUpdate(minutesId);
@@ -104,10 +108,14 @@ public class MinutesService {
                 .filter(found -> found.isUsableBy(userId))
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
 
-        sectionRepository.deleteAll(sectionRepository.findByMinutesIdOrderByPosition(minutesId));
+        List<MinutesSection> previous = sectionRepository.findByMinutesIdOrderByPosition(minutesId);
+        Map<String, String> contents = new HashMap<>();
+        previous.forEach(section -> contents.putIfAbsent(section.getTitle(), section.getContent()));
+        sectionRepository.deleteAll(previous);
         List<MinutesSection> sections = new ArrayList<>();
         for (TemplateItem item : templateItemRepository.findByTemplateIdOrderByPosition(template.getId())) {
-            sections.add(sectionRepository.save(new MinutesSection(minutesId, item.getPosition(), item.getTitle(), "")));
+            sections.add(sectionRepository.save(new MinutesSection(minutesId, item.getPosition(), item.getTitle(),
+                    contents.getOrDefault(item.getTitle(), ""))));
         }
         recordRevision(minutes, template.getId(), sections, userId);
         return detail(minutes, userId);

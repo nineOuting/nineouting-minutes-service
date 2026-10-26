@@ -55,4 +55,19 @@ class TemplateTest extends ApiTestSupport {
         call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
                 .andExpect(jsonPath("$.data.sections[*].title", contains("요약", "할 일")));
     }
+
+    @Test
+    void 양식을_바꾸면_제목이_같은_칸의_내용은_남는다() throws Exception {
+        Long writer = newId();
+        Long templateId = id(call(writer, post("/api/minutes-templates"), "{\"name\":\"짧은 양식\",\"items\":[\"요약\",\"할 일\"]}"),
+                "$.data.templateId");
+        Long minutesId = finishMeeting(newId(), folder(newId(), "기획", writer), "회의", LocalDateTime.of(2026, 10, 20, 10, 0),
+                writer, writer);
+        writeContent(minutesId, writer, "논의 내용", "결정 내용", "미결 내용", "할 일 내용");
+
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
+                .andExpect(jsonPath("$.data.sections[*].title", contains("요약", "할 일")))
+                .andExpect(jsonPath("$.data.sections[*].content", contains("", "할 일 내용")))
+                .andExpect(jsonPath("$.data.templateId").value(templateId));
+    }
 }
