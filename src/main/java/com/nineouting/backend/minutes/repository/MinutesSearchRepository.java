@@ -23,7 +23,7 @@ public class MinutesSearchRepository {
     /**
      * @param mark FAVORITE / IMPORTANT면 viewerId가 표시한 회의록만. null이면 전체
      */
-    public record Filter(Long folderId, String query, LocalDate from, LocalDate to, String tag, Long attendeeId,
+    public record Filter(Long folderId, String query, LocalDate from, LocalDate to, String location, Long attendeeId,
                          String mark, Long viewerId) {
     }
 
@@ -50,12 +50,11 @@ public class MinutesSearchRepository {
     }
 
     private static String where(Filter filter, Map<String, Object> params) {
-        StringBuilder sql = new StringBuilder("where m.folder_id = :folderId and m.status = 'CONFIRMED'");
+        StringBuilder sql = new StringBuilder("where m.folder_id = :folderId");
         params.put("folderId", filter.folderId());
         if (filter.query() != null && !filter.query().isBlank()) {
-            String query = filter.query().trim();
             sql.append(" and m.search_text ilike :like");
-            params.put("like", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+            params.put("like", "%" + escapeLike(filter.query().trim()) + "%");
         }
         if (filter.from() != null) {
             sql.append(" and m.meeting_start_at >= :from");
@@ -65,9 +64,9 @@ public class MinutesSearchRepository {
             sql.append(" and m.meeting_start_at < :to");
             params.put("to", filter.to().plusDays(1).atStartOfDay());
         }
-        if (filter.tag() != null && !filter.tag().isBlank()) {
-            sql.append(" and exists (select 1 from minutes_tags t where t.minutes_id = m.id and lower(t.tag) = lower(:tag))");
-            params.put("tag", filter.tag().trim());
+        if (filter.location() != null && !filter.location().isBlank()) {
+            sql.append(" and m.location ilike :location");
+            params.put("location", "%" + escapeLike(filter.location().trim()) + "%");
         }
         if (filter.attendeeId() != null) {
             sql.append(" and exists (select 1 from minutes_attendees a where a.minutes_id = m.id and a.user_id = :attendeeId)");
@@ -80,5 +79,10 @@ public class MinutesSearchRepository {
             params.put("viewerId", filter.viewerId());
         }
         return sql.toString();
+    }
+
+    /** LIKE 검색어의 \, %, _ 를 글자 그대로 찾게 한다 */
+    private static String escapeLike(String text) {
+        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

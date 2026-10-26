@@ -43,6 +43,10 @@ public class Minutes extends BaseTimeEntity {
     @Column(name = "meeting_start_at", nullable = false)
     private LocalDateTime meetingStartAt;
 
+    /** 회의 장소 (아카이브 장소 필터, REQ-055). 없으면 빈 문자열 */
+    @Column(nullable = false, length = 100)
+    private String location;
+
     @Column(name = "writer_user_id", nullable = false)
     private Long writerUserId;
 
@@ -71,12 +75,13 @@ public class Minutes extends BaseTimeEntity {
     private String searchText;
 
     public Minutes(Long meetingId, Long workspaceId, Long folderId, String title, LocalDateTime meetingStartAt,
-                   Long writerUserId) {
+                   String location, Long writerUserId) {
         this.meetingId = meetingId;
         this.workspaceId = workspaceId;
         this.folderId = folderId;
         this.title = title;
         this.meetingStartAt = meetingStartAt;
+        this.location = location == null ? "" : location;
         this.writerUserId = writerUserId;
         this.status = MinutesStatus.WRITING;
         this.searchText = title;

@@ -6,7 +6,6 @@ import com.nineouting.backend.minutes.domain.Minutes;
 import com.nineouting.backend.minutes.domain.MinutesMark;
 import com.nineouting.backend.minutes.domain.MinutesReview;
 import com.nineouting.backend.minutes.domain.MinutesStatus;
-import com.nineouting.backend.minutes.domain.MinutesTag;
 import com.nineouting.backend.minutes.domain.ReviewStatus;
 import com.nineouting.backend.minutes.dto.ArchiveItemResponse;
 import com.nineouting.backend.minutes.dto.ArchivePageResponse;
@@ -19,7 +18,6 @@ import com.nineouting.backend.minutes.repository.MinutesMarkRepository;
 import com.nineouting.backend.minutes.repository.MinutesRepository;
 import com.nineouting.backend.minutes.repository.MinutesReviewRepository;
 import com.nineouting.backend.minutes.repository.MinutesSearchRepository;
-import com.nineouting.backend.minutes.repository.MinutesTagRepository;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -44,27 +42,23 @@ public class ArchiveService {
 
     private final MinutesRepository minutesRepository;
     private final MinutesSearchRepository searchRepository;
-    private final MinutesTagRepository tagRepository;
     private final MinutesMarkRepository markRepository;
     private final MinutesReviewRepository reviewRepository;
     private final MinutesAccess access;
     private final WorkspaceClient workspaceClient;
 
-    /** REQ-053~056. 폴더의 확정된 회의록, 회의 날짜 최신순. 필터는 함께 쓸 수 있다 */
+    /** REQ-053~056. 폴더의 회의록 전체(작성 중·검토 중·확정), 회의 날짜 최신순. 필터(기간·참석자·장소)는 함께 쓸 수 있다 */
     @Transactional(readOnly = true)
     public ArchivePageResponse folderMinutes(Long folderId, Long userId, String query, LocalDate from, LocalDate to,
-                                             String tag, Long attendeeId, MarkFilter mark, int page, int size) {
+                                             String location, Long attendeeId, MarkFilter mark, int page, int size) {
         access.requireFolderAccess(folderId, userId);
         int pageNumber = Math.max(page, 0);
         int pageSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
         MinutesSearchRepository.Page result = searchRepository.search(new MinutesSearchRepository.Filter(folderId, query,
-                from, to, tag, attendeeId, mark == null ? null : mark.name(), userId), pageNumber, pageSize);
+                from, to, location, attendeeId, mark == null ? null : mark.name(), userId), pageNumber, pageSize);
 
         Map<Long, Minutes> found = minutesRepository.findAllById(result.ids()).stream()
                 .collect(Collectors.toMap(Minutes::getId, Function.identity()));
-        Map<Long, List<String>> tags = tagRepository.findByMinutesIdIn(result.ids()).stream()
-                .collect(Collectors.groupingBy(MinutesTag::getMinutesId,
-                        Collectors.mapping(MinutesTag::getTag, Collectors.toList())));
         Map<Long, MinutesMark> marks = markRepository.findByUserIdAndMinutesIdIn(userId, result.ids()).stream()
                 .collect(Collectors.toMap(MinutesMark::getMinutesId, Function.identity()));
         List<ArchiveItemResponse> items = result.ids().stream()
@@ -72,7 +66,7 @@ public class ArchiveService {
                 .map(minutes -> {
                     MinutesMark minutesMark = marks.get(minutes.getId());
                     return new ArchiveItemResponse(minutes.getId(), minutes.getMeetingId(), minutes.getTitle(),
-                            minutes.getMeetingStartAt(), minutes.getConfirmedAt(), tags.getOrDefault(minutes.getId(), List.of()),
+                            minutes.getMeetingStartAt(), minutes.getLocation(), minutes.getStatus(), minutes.getConfirmedAt(),
                             minutesMark != null && minutesMark.isFavorite(), minutesMark != null && minutesMark.isImportant());
                 })
                 .toList();

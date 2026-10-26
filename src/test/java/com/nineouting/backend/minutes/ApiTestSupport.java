@@ -117,8 +117,14 @@ public abstract class ApiTestSupport {
     /** 회의 마무리 이벤트를 처리한 것처럼 회의록을 만들고 회의록 ID를 돌려준다 */
     protected Long finishMeeting(Long meetingId, Long folderId, String title, LocalDateTime startAt, Long writerId,
                                  Long... attendees) throws Exception {
+        return finishMeetingAt(meetingId, folderId, title, startAt, "", writerId, attendees);
+    }
+
+    /** finishMeeting과 같고 회의 장소를 정한다 */
+    protected Long finishMeetingAt(Long meetingId, Long folderId, String title, LocalDateTime startAt, String location,
+                                   Long writerId, Long... attendees) throws Exception {
         minutesService.createFromMeeting(new MeetingFinished(meetingId, workspaceOf(folderId), folderId, title, startAt,
-                writerId, List.of(attendees)));
+                location, writerId, List.of(attendees)));
         return id(call(writerId, get("/api/meetings/" + meetingId + "/minutes"), null), "$.data.minutesId");
     }
 

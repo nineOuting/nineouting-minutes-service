@@ -25,7 +25,6 @@
 | PUT | `/api/minutes/{minutesId}/template` | 양식 선택 (작성자, 작성 중) |
 | PUT | `/api/minutes/{minutesId}/sections` | 내용 저장 (작성자, `version` 확인) |
 | GET | `/api/minutes/{minutesId}/revisions` | 수정 기록 |
-| PUT | `/api/minutes/{minutesId}/tags` | 태그 (작성자, 최대 10개) |
 | POST | `/api/minutes/{minutesId}/review-request` | 검토 요청 (작성자) |
 | GET | `/api/minutes/{minutesId}/reviews` | 참석자별 검토 현황 |
 | POST | `/api/minutes/{minutesId}/approve` | 동의 (참석자). 모두 동의하면 자동 확정 |
@@ -33,7 +32,7 @@
 | POST | `/api/minutes/{minutesId}/comments/{commentId}/resolve` | 코멘트 반영 표시 (작성자) |
 | POST | `/api/minutes/{minutesId}/confirm` | 작성자 확정 |
 | PUT | `/api/minutes/{minutesId}/marks` | 즐겨찾기·중요 표시 (개인) |
-| GET | `/api/folders/{folderId}/minutes?q=&from=&to=&tag=&attendeeId=&mark=&page=&size=` | 아카이브 (확정 회의록) |
+| GET | `/api/folders/{folderId}/minutes?q=&from=&to=&location=&attendeeId=&mark=&page=&size=` | 아카이브 (폴더의 회의록 전체, 작성 중·검토 중·확정) |
 | GET | `/api/users/me/review-requests` | 홈: 내가 검토할 회의록 |
 | GET | `/api/users/me/recent-minutes?size=10` | 홈: 최근 확정 회의록 |
 | GET · POST · PUT · DELETE | `/api/minutes-templates` | 회의록 양식 (개인 + 기본 양식) |

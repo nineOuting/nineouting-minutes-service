@@ -4,9 +4,7 @@ import com.nineouting.backend.common.client.WorkspaceClient;
 import com.nineouting.backend.common.web.error.BusinessException;
 import com.nineouting.backend.common.web.error.CommonErrorCode;
 import com.nineouting.backend.minutes.domain.Minutes;
-import com.nineouting.backend.minutes.domain.MinutesStatus;
 import com.nineouting.backend.minutes.error.MinutesErrorCode;
-import com.nineouting.backend.minutes.repository.MinutesAttendeeRepository;
 import com.nineouting.backend.minutes.repository.MinutesRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -24,7 +22,6 @@ import org.springframework.stereotype.Component;
 public class MinutesAccess {
 
     private final MinutesRepository minutesRepository;
-    private final MinutesAttendeeRepository attendeeRepository;
     private final WorkspaceClient workspaceClient;
 
     public Minutes require(Long minutesId) {
@@ -44,11 +41,9 @@ public class MinutesAccess {
         }
     }
 
+    /** REQ-053. 회의록이 있는 폴더의 멤버면 상태와 상관없이 볼 수 있다 (2026-10-26 기획서: 확정 전 참석자만 규칙 없앰) */
     public void requireViewable(Minutes minutes, Long userId) {
         requireFolderAccess(minutes.getFolderId(), userId);
-        if (!minutes.is(MinutesStatus.CONFIRMED) && !isAttendee(minutes, userId)) {
-            throw new BusinessException(MinutesErrorCode.NOT_MINUTES_ATTENDEE);
-        }
     }
 
     public void requireWriter(Minutes minutes, Long userId) {
@@ -56,9 +51,5 @@ public class MinutesAccess {
         if (!minutes.isWriter(userId)) {
             throw new BusinessException(MinutesErrorCode.NOT_MINUTES_WRITER);
         }
-    }
-
-    public boolean isAttendee(Minutes minutes, Long userId) {
-        return attendeeRepository.existsByMinutesIdAndUserId(minutes.getId(), userId);
     }
 }

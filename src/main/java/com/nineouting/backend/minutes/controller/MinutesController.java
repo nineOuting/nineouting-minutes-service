@@ -7,7 +7,6 @@ import com.nineouting.backend.minutes.dto.MinutesDetailResponse;
 import com.nineouting.backend.minutes.dto.RevisionResponse;
 import com.nineouting.backend.minutes.dto.SaveSectionsRequest;
 import com.nineouting.backend.minutes.dto.SelectTemplateRequest;
-import com.nineouting.backend.minutes.dto.TagsRequest;
 import com.nineouting.backend.minutes.service.MinutesService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -37,7 +36,7 @@ public class MinutesController {
         return ApiResponse.ok(minutesService.get(minutesId, user.userId()));
     }
 
-    /** REQ-100 */
+    /** REQ-100 (레거시) */
     @PutMapping("/api/minutes/{minutesId}/template")
     public ApiResponse<MinutesDetailResponse> selectTemplate(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
                                                              @Valid @RequestBody SelectTemplateRequest request) {
@@ -55,12 +54,5 @@ public class MinutesController {
     @GetMapping("/api/minutes/{minutesId}/revisions")
     public ApiResponse<List<RevisionResponse>> revisions(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         return ApiResponse.ok(minutesService.revisions(minutesId, user.userId()));
-    }
-
-    /** REQ-055 */
-    @PutMapping("/api/minutes/{minutesId}/tags")
-    public ApiResponse<List<String>> tags(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
-                                          @Valid @RequestBody TagsRequest request) {
-        return ApiResponse.ok(minutesService.setTags(minutesId, user.userId(), request.tags()));
     }
 }
