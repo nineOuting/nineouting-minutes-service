@@ -36,7 +36,7 @@ public class MinutesController {
         return ApiResponse.ok(minutesService.get(minutesId, user.userId()));
     }
 
-    /** REQ-100 */
+    /** REQ-100 (레거시) */
     @PutMapping("/api/minutes/{minutesId}/template")
     public ApiResponse<MinutesDetailResponse> selectTemplate(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
                                                              @Valid @RequestBody SelectTemplateRequest request) {

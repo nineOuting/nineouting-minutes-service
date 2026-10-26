@@ -92,7 +92,7 @@ public class MinutesService {
         return detail(minutes, userId);
     }
 
-    /** REQ-100. 작성자, 작성 중에만. 칸을 양식 항목대로 다시 만든다 (내용은 비운다). */
+    /** REQ-100 (레거시). 작성자, 작성 중에만. 칸을 양식 항목대로 다시 만든다 (내용은 비운다). */
     @Transactional
     public MinutesDetailResponse selectTemplate(Long minutesId, Long userId, Long templateId) {
         Minutes minutes = access.requireForUpdate(minutesId);
