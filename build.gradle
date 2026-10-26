@@ -50,6 +50,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-restclient'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-database-postgresql'
+    // REQ-137 회의록 PDF 다운로드
+    implementation 'com.github.librepdf:openpdf:2.0.3'
     runtimeOnly 'org.postgresql:postgresql'
 
     compileOnly 'org.projectlombok:lombok'

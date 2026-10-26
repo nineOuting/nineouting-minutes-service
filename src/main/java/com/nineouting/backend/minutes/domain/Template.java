@@ -30,9 +30,18 @@ public class Template extends BaseTimeEntity {
     @Column(nullable = false, length = 50)
     private String name;
 
-    public Template(Long ownerUserId, String name) {
+    @Column(nullable = false, length = 100)
+    private String description;
+
+    /** 레이아웃 설정 JSON (TemplateSettings) */
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String layout;
+
+    public Template(Long ownerUserId, String name, String description, String layout) {
         this.ownerUserId = ownerUserId;
         this.name = name;
+        this.description = description;
+        this.layout = layout;
     }
 
     public boolean isDefault() {
@@ -43,7 +52,9 @@ public class Template extends BaseTimeEntity {
         return isDefault() || ownerUserId.equals(userId);
     }
 
-    public void rename(String name) {
+    public void change(String name, String description, String layout) {
         this.name = name;
+        this.description = description;
+        this.layout = layout;
     }
 }

@@ -11,6 +11,8 @@ public interface MinutesAttendeeRepository extends JpaRepository<MinutesAttendee
 
     List<MinutesAttendee> findByMinutesIdOrderById(Long minutesId);
 
+    List<MinutesAttendee> findByMinutesIdInOrderById(Collection<Long> minutesIds);
+
     boolean existsByMinutesIdAndUserId(Long minutesId, Long userId);
 
     @Modifying

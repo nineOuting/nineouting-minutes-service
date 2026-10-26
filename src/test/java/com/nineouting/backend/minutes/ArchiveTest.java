@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** 아카이브 검색·필터·즐겨찾기 (REQ-053~056), 홈 검토 대기·최근 확정 (REQ-021~023, 026~027) */
+/** 아카이브 검색·필터·즐겨찾기·최근 본 회의록 (REQ-053~056, 146), 홈 검토 대기·최근 확정·작성 중 (REQ-021~023, 026~027, 142) */
 class ArchiveTest extends ApiTestSupport {
 
     private Long writer;
@@ -104,6 +104,91 @@ class ArchiveTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data[0].minutesId").value(earlier))
                 .andExpect(jsonPath("$.data[0].folderName").value("기획"))
                 .andExpect(jsonPath("$.data[0].workspaceName").isNotEmpty());
+    }
+
+    @Test
+    void 워크스페이스_아카이브는_들어갈_수_있는_모든_폴더의_회의록을_여러_장소와_참석자로_거른다() throws Exception {
+        Long workspaceId = newId();
+        Long planning = folder(workspaceId, "기획", writer, attendee, folderMember);
+        Long design = folder(workspaceId, "디자인", writer, attendee);
+        Long other = folder(newId(), "다른 곳", writer);
+        Long first = finishMeetingAt(newId(), planning, "기획 회의", LocalDateTime.of(2026, 10, 5, 10, 0), "회의실 A", writer,
+                writer, attendee);
+        Long second = finishMeetingAt(newId(), design, "디자인 회의", LocalDateTime.of(2026, 10, 15, 10, 0), "회의실 B",
+                writer, writer);
+        Long third = finishMeetingAt(newId(), planning, "온라인 회의", LocalDateTime.of(2026, 10, 25, 10, 0), "", writer,
+                writer, folderMember);
+        finishMeetingAt(newId(), other, "다른 워크스페이스 회의", LocalDateTime.of(2026, 10, 20, 10, 0), "회의실 A", writer,
+                writer);
+        String url = "/api/workspaces/" + workspaceId + "/minutes";
+
+        call(writer, get(url), null)
+                .andExpect(jsonPath("$.data.items[*].minutesId", contains(third.intValue(), second.intValue(), first.intValue())))
+                .andExpect(jsonPath("$.data.items[1].folderName").value("디자인"))
+                .andExpect(jsonPath("$.data.items[2].attendees[*].userId", contains(writer.intValue(), attendee.intValue())))
+                .andExpect(jsonPath("$.data.items[2].attendees[1].name").value("user" + attendee))
+                .andExpect(jsonPath("$.data.totalCount").value(3));
+        call(writer, get(url).param("sort", "OLDEST"), null)
+                .andExpect(jsonPath("$.data.items[*].minutesId", contains(first.intValue(), second.intValue(), third.intValue())));
+        // 장소는 고른 것 중 하나와 같아야 한다
+        call(writer, get(url).param("location", "회의실 A", "회의실 B"), null)
+                .andExpect(jsonPath("$.data.items[*].minutesId", contains(second.intValue(), first.intValue())));
+        call(writer, get(url).param("location", "회의실"), null).andExpect(jsonPath("$.data.totalCount").value(0));
+        // 참석자는 고른 사람 중 한 명이라도 참석했으면
+        call(writer, get(url).param("attendeeId", attendee.toString(), folderMember.toString()), null)
+                .andExpect(jsonPath("$.data.items[*].minutesId", contains(third.intValue(), first.intValue())));
+        call(writer, get(url).param("attendeeId", attendee.toString()).param("location", "회의실 B"), null)
+                .andExpect(jsonPath("$.data.totalCount").value(0));
+        // 들어갈 수 없는 폴더의 회의록은 보이지 않는다
+        call(folderMember, get(url), null)
+                .andExpect(jsonPath("$.data.items[*].minutesId", contains(third.intValue(), first.intValue())));
+        call(newId(), get(url), null).andExpect(jsonPath("$.data.totalCount").value(0));
+
+        call(writer, get(url + "/locations"), null)
+                .andExpect(jsonPath("$.data[*]", contains("회의실 A", "회의실 B")));
+        call(folderMember, get(url + "/locations"), null).andExpect(jsonPath("$.data[*]", contains("회의실 A")));
+    }
+
+    @Test
+    void 최근_본_회의록은_워크스페이스마다_최근_본_순으로_보인다() throws Exception {
+        Long workspaceId = newId();
+        Long planning = folder(workspaceId, "기획", writer, folderMember);
+        Long first = finishMeeting(newId(), planning, "첫 회의", LocalDateTime.of(2026, 10, 5, 10, 0), writer, writer);
+        Long second = finishMeeting(newId(), planning, "둘째 회의", LocalDateTime.of(2026, 10, 6, 10, 0), writer, writer);
+        Long elsewhere = finishMeeting(newId(), folderId, "다른 워크스페이스", LocalDateTime.of(2026, 10, 7, 10, 0), writer,
+                writer);
+        String url = "/api/workspaces/" + workspaceId + "/viewed-minutes";
+
+        call(folderMember, post("/api/minutes/" + first + "/view"), null).andExpect(status().isOk());
+        call(folderMember, post("/api/minutes/" + second + "/view"), null).andExpect(status().isOk());
+        call(folderMember, post("/api/minutes/" + elsewhere + "/view"), null).andExpect(status().isOk());
+        call(folderMember, get(url), null)
+                .andExpect(jsonPath("$.data[*].minutesId", contains(second.intValue(), first.intValue())));
+
+        call(folderMember, post("/api/minutes/" + first + "/view"), null).andExpect(status().isOk());
+        call(folderMember, get(url).param("size", "1"), null)
+                .andExpect(jsonPath("$.data[*].minutesId", contains(first.intValue())))
+                .andExpect(jsonPath("$.data[0].title").value("첫 회의"));
+        call(writer, get(url), null).andExpect(jsonPath("$.data.length()").value(0));
+        call(newId(), post("/api/minutes/" + first + "/view"), null).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void 홈에_내가_작성자인_작성_중_회의록이_오래된_순으로_보인다() throws Exception {
+        Long later = finishMeetingAt(newId(), folderId, "나중 회의", LocalDateTime.of(2026, 10, 20, 10, 0), "회의실 B", writer,
+                writer, attendee);
+        Long earlier = finishMeeting(newId(), folderId, "먼저 회의", LocalDateTime.of(2026, 10, 10, 10, 0), writer, writer);
+        Long reviewing = finishMeeting(newId(), folderId, "검토 중 회의", LocalDateTime.of(2026, 10, 1, 10, 0), writer, writer);
+        writeContent(reviewing, writer, "내용");
+        call(writer, post("/api/minutes/" + reviewing + "/review-request"), null);
+        finishMeeting(newId(), folderId, "다른 사람이 쓰는 회의", LocalDateTime.of(2026, 10, 2, 10, 0), attendee, attendee);
+
+        call(writer, get("/api/users/me/writing-minutes"), null)
+                .andExpect(jsonPath("$.data[*].minutesId", contains(earlier.intValue(), later.intValue())))
+                .andExpect(jsonPath("$.data[1].location").value("회의실 B"))
+                .andExpect(jsonPath("$.data[1].folderName").value("기획"))
+                .andExpect(jsonPath("$.data[1].workspaceName").isNotEmpty());
+        call(folderMember, get("/api/users/me/writing-minutes"), null).andExpect(jsonPath("$.data.length()").value(0));
     }
 
     private Long confirmed(String title, LocalDateTime startAt, String content, Long... others) throws Exception {

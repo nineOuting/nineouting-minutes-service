@@ -30,9 +30,18 @@ public class TemplateItem {
     @Column(nullable = false, length = 100)
     private String title;
 
-    public TemplateItem(Long templateId, int position, String title) {
+    @Column(nullable = false, length = 200)
+    private String description;
+
+    /** 항목 설정 JSON (TemplateSettings) */
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String settings;
+
+    public TemplateItem(Long templateId, int position, String title, String description, String settings) {
         this.templateId = templateId;
         this.position = position;
         this.title = title;
+        this.description = description;
+        this.settings = settings;
     }
 }

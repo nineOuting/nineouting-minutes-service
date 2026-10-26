@@ -10,6 +10,7 @@ import com.nineouting.backend.minutes.repository.MinutesRepository;
 import com.nineouting.backend.minutes.repository.MinutesReviewRepository;
 import com.nineouting.backend.minutes.repository.MinutesRevisionRepository;
 import com.nineouting.backend.minutes.repository.MinutesSectionRepository;
+import com.nineouting.backend.minutes.repository.MinutesViewRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -31,6 +32,7 @@ public class FolderDeletedHandler implements InboxHandler {
     private final MinutesReviewRepository reviewRepository;
     private final MinutesCommentRepository commentRepository;
     private final MinutesMarkRepository markRepository;
+    private final MinutesViewRepository viewRepository;
 
     @Override
     public boolean supports(String eventType) {
@@ -53,6 +55,7 @@ public class FolderDeletedHandler implements InboxHandler {
         reviewRepository.deleteByMinutesIdIn(minutesIds);
         commentRepository.deleteByMinutesIdIn(minutesIds);
         markRepository.deleteByMinutesIdIn(minutesIds);
+        viewRepository.deleteByMinutesIdIn(minutesIds);
         minutesRepository.deleteAllByIdIn(minutesIds);
     }
 }
