@@ -1,7 +1,10 @@
 package com.nineouting.backend.minutes;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,7 +34,7 @@ class ExportTest extends ApiTestSupport {
 
         byte[] docx = call(folderMember, get("/api/minutes/" + minutesId + "/export").param("format", "DOCX"), null)
                 .andExpect(status().isOk())
-                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString(".docx")))
+                .andExpect(header().string("Content-Disposition", containsString(".docx")))
                 .andReturn().getResponse().getContentAsByteArray();
         String document = null;
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(docx))) {
@@ -44,5 +47,24 @@ class ExportTest extends ApiTestSupport {
         assertThat(document).contains("배포 회의", "회의실 A", "안건별 논의", "배포 일정을 정했다 &lt;API &amp; 웹&gt;");
 
         call(newId(), get("/api/minutes/" + minutesId + "/export"), null).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void 양식_설정을_따른_PDF를_만든다() throws Exception {
+        Long writer = newId();
+        String body = """
+                {"name":"표 양식","items":[{"title":"안건표","settings":{"recordType":"TABLE","table":{"cols":2,"border":"BOLD"}}},
+                 {"title":"할 일","settings":{"recordType":"CHECKLIST","titleSize":18,"color":"#27187d"}}],
+                 "layout":{"pageNumber":true,"align":"CENTER","marginVerticalMm":30,
+                           "header":{"enabled":true,"text":"SYNC"},"footer":{"enabled":true,"text":"사내용"}}}""";
+        Long templateId = id(call(writer, post("/api/minutes-templates"), body), "$.data.templateId");
+        Long minutesId = finishMeeting(newId(), folder(newId(), "기획", writer), "표 회의", LocalDateTime.of(2026, 10, 20, 10, 0),
+                writer, writer);
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId));
+
+        byte[] pdf = call(writer, get("/api/minutes/" + minutesId + "/export"), null)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(pdf, 0, 5, StandardCharsets.ISO_8859_1)).isEqualTo("%PDF-");
     }
 }

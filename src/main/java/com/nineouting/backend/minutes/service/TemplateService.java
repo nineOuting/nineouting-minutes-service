@@ -4,11 +4,13 @@ import com.nineouting.backend.common.web.error.BusinessException;
 import com.nineouting.backend.common.web.error.CommonErrorCode;
 import com.nineouting.backend.minutes.domain.Template;
 import com.nineouting.backend.minutes.domain.TemplateItem;
+import com.nineouting.backend.minutes.dto.TemplateItemRequest;
 import com.nineouting.backend.minutes.dto.TemplateRequest;
 import com.nineouting.backend.minutes.dto.TemplateResponse;
 import com.nineouting.backend.minutes.error.MinutesErrorCode;
 import com.nineouting.backend.minutes.repository.TemplateItemRepository;
 import com.nineouting.backend.minutes.repository.TemplateRepository;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -26,35 +28,33 @@ public class TemplateService {
 
     private final TemplateRepository templateRepository;
     private final TemplateItemRepository itemRepository;
+    private final TemplateSettings settings;
 
     /** 기본 양식이 먼저, 그다음 내 양식 */
     @Transactional(readOnly = true)
     public List<TemplateResponse> list(Long userId) {
         List<Template> templates = templateRepository.findUsableBy(userId);
-        Map<Long, List<String>> items = itemRepository.findByTemplateIdInOrderByPosition(
+        Map<Long, List<TemplateItem>> items = itemRepository.findByTemplateIdInOrderByPosition(
                         templates.stream().map(Template::getId).toList()).stream()
-                .collect(Collectors.groupingBy(TemplateItem::getTemplateId,
-                        Collectors.mapping(TemplateItem::getTitle, Collectors.toList())));
+                .collect(Collectors.groupingBy(TemplateItem::getTemplateId));
         return templates.stream()
-                .map(template -> new TemplateResponse(template.getId(), template.getName(), template.isDefault(),
-                        items.getOrDefault(template.getId(), List.of())))
+                .map(template -> response(template, items.getOrDefault(template.getId(), List.of())))
                 .toList();
     }
 
     @Transactional
     public TemplateResponse create(Long userId, TemplateRequest request) {
-        Template template = templateRepository.save(new Template(userId, request.name()));
-        saveItems(template.getId(), request.items());
-        return new TemplateResponse(template.getId(), template.getName(), false, request.items());
+        Template template = templateRepository.save(new Template(userId, request.name(), request.description(),
+                settings.write(request.layout())));
+        return response(template, saveItems(template.getId(), request.items()));
     }
 
     @Transactional
     public TemplateResponse update(Long templateId, Long userId, TemplateRequest request) {
         Template template = requireOwn(templateId, userId);
-        template.rename(request.name());
+        template.change(request.name(), request.description(), settings.write(request.layout()));
         itemRepository.deleteByTemplateId(templateId);
-        saveItems(templateId, request.items());
-        return new TemplateResponse(templateId, template.getName(), false, request.items());
+        return response(template, saveItems(templateId, request.items()));
     }
 
     @Transactional
@@ -75,9 +75,22 @@ public class TemplateService {
         return template;
     }
 
-    private void saveItems(Long templateId, List<String> titles) {
-        for (int position = 0; position < titles.size(); position++) {
-            itemRepository.save(new TemplateItem(templateId, position, titles.get(position)));
+    private List<TemplateItem> saveItems(Long templateId, List<TemplateItemRequest> requests) {
+        List<TemplateItem> saved = new ArrayList<>();
+        for (int position = 0; position < requests.size(); position++) {
+            TemplateItemRequest request = requests.get(position);
+            saved.add(itemRepository.save(new TemplateItem(templateId, position, request.title(), request.description(),
+                    settings.write(request.settings()))));
         }
+        return saved;
+    }
+
+    private TemplateResponse response(Template template, List<TemplateItem> items) {
+        return new TemplateResponse(template.getId(), template.getName(), template.getDescription(), template.isDefault(),
+                items.stream()
+                        .map(item -> new TemplateResponse.TemplateItemResponse(item.getTitle(), item.getDescription(),
+                                settings.read(item.getSettings())))
+                        .toList(),
+                settings.read(template.getLayout()));
     }
 }

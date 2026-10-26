@@ -88,8 +88,8 @@ class MinutesDomainTest {
 
     @Test
     void 기본_양식은_누구나_고르고_개인_양식은_만든_사람만_고른다() {
-        Template defaults = new Template(null, "기본 양식");
-        Template mine = new Template(WRITER, "내 양식");
+        Template defaults = new Template(null, "기본 양식", "", "{}");
+        Template mine = new Template(WRITER, "내 양식", "", "{}");
 
         assertThat(defaults.isDefault()).isTrue();
         assertThat(defaults.isUsableBy(WRITER)).isTrue();
