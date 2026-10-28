@@ -8,7 +8,7 @@ group = 'com.nineouting.backend'
 version = '0.0.1'
 
 ext {
-    commonVersion = '0.7.0'
+    commonVersion = '0.8.0'
     jjwtVersion = '0.12.6'
 }
 
@@ -46,7 +46,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-kafka'
+    implementation platform("software.amazon.awssdk:bom:2.55.0")
+    implementation 'software.amazon.awssdk:sns'  // 이벤트 보내기 (outbox)
+    implementation 'software.amazon.awssdk:sqs'  // 이벤트 받기 (inbox)
     implementation 'org.springframework.boot:spring-boot-starter-restclient'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-database-postgresql'
@@ -63,7 +65,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
-    testImplementation 'org.testcontainers:testcontainers-kafka'
+    testImplementation 'org.testcontainers:testcontainers-localstack'
     testImplementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
     testRuntimeOnly "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
     testRuntimeOnly "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"

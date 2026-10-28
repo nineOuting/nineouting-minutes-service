@@ -40,7 +40,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * 실제 PostgreSQL·Kafka와 security-common 토큰 검증을 거치는 API 테스트의 공통 도우미.
+ * 실제 PostgreSQL·SNS·SQS와 security-common 토큰 검증을 거치는 API 테스트의 공통 도우미.
  * user-service·workspace-service는 띄우지 않고 가짜로 바꾼다.
  * <ul>
  *   <li>사용자 이름: user{ID}</li>
