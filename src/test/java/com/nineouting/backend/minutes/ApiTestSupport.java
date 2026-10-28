@@ -1,5 +1,6 @@
 package com.nineouting.backend.minutes;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -77,6 +78,12 @@ public abstract class ApiTestSupport {
     @BeforeEach
     void fakeOtherServices() {
         given(userClient.findUsers(anyCollection())).willAnswer(invocation -> {
+            Collection<Long> ids = invocation.getArgument(0);
+            return ids.stream().collect(Collectors.toMap(Function.identity(),
+                    id -> new UserSummary(id, "user" + id, "user" + id + "@example.com", null), (a, b) -> a));
+        });
+        // 워크스페이스 프로필 조회 (REQ-114·115·118). 가짜에서는 계정 프로필과 같다
+        given(userClient.findUsers(anyCollection(), any())).willAnswer(invocation -> {
             Collection<Long> ids = invocation.getArgument(0);
             return ids.stream().collect(Collectors.toMap(Function.identity(),
                     id -> new UserSummary(id, "user" + id, "user" + id + "@example.com", null), (a, b) -> a));

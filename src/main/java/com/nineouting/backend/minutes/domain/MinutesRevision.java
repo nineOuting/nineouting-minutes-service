@@ -12,7 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 수정 기록 (REQ-104, 111). 저장할 때마다 전체 내용(칸 제목·내용 JSON)과 수정한 사람·시각을 남긴다.
+ * 수정 기록 (REQ-104 레거시, 111). 저장할 때마다 전체 내용(칸 제목·내용 JSON)과 수정한 사람·시각을 남긴다.
  */
 @Getter
 @Entity

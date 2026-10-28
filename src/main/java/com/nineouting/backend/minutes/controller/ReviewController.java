@@ -18,34 +18,34 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 검토 요청·현황·동의·코멘트·확정 (REQ-106~110) */
+/** 검토 요청·현황·동의·코멘트·확정 (REQ-106~110 레거시) */
 @RestController
 @RequiredArgsConstructor
 public class ReviewController {
 
     private final ReviewService reviewService;
 
-    /** REQ-106, 108 */
+    /** REQ-106·108 (레거시) */
     @PostMapping("/api/minutes/{minutesId}/review-request")
     public ApiResponse<Void> requestReview(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         reviewService.requestReview(minutesId, user.userId());
         return ApiResponse.ok();
     }
 
-    /** REQ-109 */
+    /** REQ-109 (레거시) */
     @GetMapping("/api/minutes/{minutesId}/reviews")
     public ApiResponse<List<ReviewResponse>> reviews(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         return ApiResponse.ok(reviewService.reviews(minutesId, user.userId()));
     }
 
-    /** REQ-107, 110 */
+    /** REQ-107·110 (레거시) */
     @PostMapping("/api/minutes/{minutesId}/approve")
     public ApiResponse<Void> approve(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         reviewService.approve(minutesId, user.userId());
         return ApiResponse.ok();
     }
 
-    /** REQ-108 */
+    /** REQ-108 (레거시) */
     @PostMapping("/api/minutes/{minutesId}/comments")
     public ResponseEntity<ApiResponse<CommentResponse>> comment(@CurrentUser AuthenticatedUser user,
                                                                 @PathVariable Long minutesId,
@@ -66,7 +66,7 @@ public class ReviewController {
         return ApiResponse.ok();
     }
 
-    /** REQ-107: 작성자가 확정 */
+    /** REQ-107 (레거시): 작성자가 확정 */
     @PostMapping("/api/minutes/{minutesId}/confirm")
     public ApiResponse<Void> confirm(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         reviewService.confirmByWriter(minutesId, user.userId());

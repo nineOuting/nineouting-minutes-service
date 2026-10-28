@@ -11,7 +11,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 최근 본 회의록 (REQ-146). 사람마다 회의록당 1개 */
+/** 최근 본 회의록 (REQ-159). 사람마다 회의록당 1개 */
 @Getter
 @Entity
 @Table(name = "minutes_views")

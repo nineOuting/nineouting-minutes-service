@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 /**
- * 아카이브 검색·필터 (REQ-053~056). 작성 중·검토 중·확정 모두, 회의 날짜 최신순(또는 오래된순).
+ * 아카이브 검색·필터 (REQ-053~055, 056(레거시)). 작성 중·검토 중·확정 모두, 회의 날짜 최신순(또는 오래된순).
  * 검색어는 대소문자를 구분하지 않는 부분 일치(ILIKE)로 찾는다. 글자 3개 단위 인덱스(pg_trgm)가 받쳐 준다.
  * 태그도 대소문자를 구분하지 않는다.
  */

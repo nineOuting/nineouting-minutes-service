@@ -10,6 +10,7 @@ import com.nineouting.backend.minutes.dto.SaveSectionsRequest;
 import com.nineouting.backend.minutes.dto.SelectTemplateRequest;
 import com.nineouting.backend.minutes.service.MinutesExportService;
 import com.nineouting.backend.minutes.service.MinutesService;
+import com.nineouting.backend.minutes.service.ReviewService;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -20,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -32,6 +34,7 @@ public class MinutesController {
 
     private final MinutesService minutesService;
     private final MinutesExportService exportService;
+    private final ReviewService reviewService;
 
     /** REQ-020: 회의에서 회의록으로 이동 */
     @GetMapping("/api/meetings/{meetingId}/minutes")
@@ -57,6 +60,13 @@ public class MinutesController {
                 .body(file.content());
     }
 
+    /** REQ-136 작성 완료: 바로 확정하고 이번 회의 참석자에게 공유 */
+    @PostMapping("/api/minutes/{minutesId}/complete")
+    public ApiResponse<Void> complete(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
+        reviewService.complete(minutesId, user.userId());
+        return ApiResponse.ok();
+    }
+
     /** REQ-140 양식 변경 (REQ-100에서 이어짐) */
     @PutMapping("/api/minutes/{minutesId}/template")
     public ApiResponse<MinutesDetailResponse> selectTemplate(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
@@ -64,14 +74,14 @@ public class MinutesController {
         return ApiResponse.ok(minutesService.selectTemplate(minutesId, user.userId(), request.templateId()));
     }
 
-    /** REQ-104, 111 */
+    /** REQ-104 (레거시), 111 */
     @PutMapping("/api/minutes/{minutesId}/sections")
     public ApiResponse<MinutesDetailResponse> saveSections(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
                                                            @Valid @RequestBody SaveSectionsRequest request) {
         return ApiResponse.ok(minutesService.saveSections(minutesId, user.userId(), request.version(), request.sections()));
     }
 
-    /** REQ-104 */
+    /** REQ-104 (레거시) */
     @GetMapping("/api/minutes/{minutesId}/revisions")
     public ApiResponse<List<RevisionResponse>> revisions(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         return ApiResponse.ok(minutesService.revisions(minutesId, user.userId()));

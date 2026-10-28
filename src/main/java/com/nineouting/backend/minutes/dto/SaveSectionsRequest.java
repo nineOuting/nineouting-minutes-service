@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 /**
- * 회의록 내용 저장 (REQ-104, 111).
+ * 회의록 내용 저장 (REQ-104 레거시, 111).
  *
  * @param version  불러온 회의록의 version. 그사이 다른 곳에서 저장했으면 409
  * @param sections 순서 = 배열 순서
