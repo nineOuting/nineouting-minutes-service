@@ -14,16 +14,15 @@ import java.util.List;
 import java.util.function.IntPredicate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 실제 Kafka 토픽에 이벤트를 넣고 inbox → 처리기까지 확인한다 */
+/** 실제 SNS 토픽에 이벤트를 넣고 inbox → 처리기까지 확인한다 */
 class MeetingEventsTest extends ApiTestSupport {
 
     private static final Duration WAIT = Duration.ofSeconds(20);
 
     @Autowired
-    KafkaTemplate<String, String> kafkaTemplate;
+    LocalMessaging messaging;
 
     @Autowired
     JsonMapper jsonMapper;
@@ -52,7 +51,7 @@ class MeetingEventsTest extends ApiTestSupport {
     }
 
     private void publish(String topic, String type, Object payload) throws Exception {
-        kafkaTemplate.send(topic, jsonMapper.writeValueAsString(EventEnvelope.of(type, "test", null, payload))).get();
+        messaging.publish(topic, null, jsonMapper.writeValueAsString(EventEnvelope.of(type, "test", null, payload)));
     }
 
     private void await(Long userId, Long meetingId, IntPredicate status) throws Exception {

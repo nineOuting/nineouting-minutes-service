@@ -14,18 +14,22 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate   # 스키마는 Flyway만 바꾼다
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    consumer:
-      auto-offset-reset: earliest   # 서비스가 처음 뜰 때 이미 쌓인 이벤트도 받는다
-
 nineouting:
+  # 이벤트는 SNS로 보내고 서비스 큐(SQS)로 받는다. 자격 증명은 AWS SDK 기본 방식 (EKS는 IRSA, 로컬은 LocalStack)
+  messaging:
+    broker: sns
+    region: ${AWS_REGION:ap-northeast-2}
+    endpoint: ${AWS_ENDPOINT_URL:}          # 비우면 AWS. 로컬은 LocalStack (http://localhost:4566)
+    access-key: ${MESSAGING_ACCESS_KEY:}    # 비우면 AWS 기본 자격 증명. LocalStack은 test
+    secret-key: ${MESSAGING_SECRET_KEY:}
+  outbox:
+    topic-prefix: ${SNS_TOPIC_PREFIX:arn:aws:sns:ap-northeast-2:000000000000:nineouting-local-}
   security:
     jwt:
       jwks-uri: ${JWT_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
   inbox:
-    # 쉼표로 구분, 공백 없이
-    topics: meeting.finished,meeting.moved,workspace.folder-deleted
+    # 이 서비스 큐. 받는 이벤트는 SNS 구독이 정한다: meeting.finished, meeting.moved, workspace.folder-deleted
+    queue: ${SQS_QUEUE_URL:http://localhost:4566/000000000000/nineouting-local-minutes-service.fifo}
   clients:
     user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
     workspace-service-url: ${WORKSPACE_SERVICE_URL:http://localhost:8082}
