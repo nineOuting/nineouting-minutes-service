@@ -17,7 +17,6 @@ spring:
 nineouting:
   # 이벤트는 SNS로 보내고 서비스 큐(SQS)로 받는다. 자격 증명은 AWS SDK 기본 방식 (EKS는 IRSA, 로컬은 LocalStack)
   messaging:
-    broker: sns
     region: ${AWS_REGION:ap-northeast-2}
     endpoint: ${AWS_ENDPOINT_URL:}          # 비우면 AWS. 로컬은 LocalStack (http://localhost:4566)
     access-key: ${MESSAGING_ACCESS_KEY:}    # 비우면 AWS 기본 자격 증명. LocalStack은 test
