@@ -33,7 +33,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 참석자 검토 요청·동의·코멘트·검토 현황, 확정 (REQ-106~110).
+ * 작성 완료 = 확정·공유 (REQ-136). 참석자 검토 요청·동의·코멘트·검토 현황 (REQ-106~110 레거시).
+ * 2026-10-28 기획서에서 검토 단계가 빠져, 작성자가 [작성 완료]를 누르면 바로 확정된다. 검토 API는 남겨 둔다.
  */
 @Service
 @RequiredArgsConstructor
@@ -49,7 +50,7 @@ public class ReviewService {
     private final Clock clock;
 
     /**
-     * REQ-106, 108. 작성자, 확정 전. 참석자(작성자 제외)의 검토를 모두 미확인으로 되돌린다 (8장 결정 2).
+     * REQ-106 (레거시), 108. 작성자, 확정 전. 참석자(작성자 제외)의 검토를 모두 미확인으로 되돌린다 (8장 결정 2).
      * 검토할 참석자가 없으면(작성자 혼자) 바로 확정한다.
      */
     @Transactional
@@ -80,20 +81,21 @@ public class ReviewService {
                         minutes.getWriterUserId(), reviewers));
     }
 
-    /** REQ-109. 참석자별 동의·미확인·수정 요청 */
+    /** REQ-109 (레거시). 참석자별 동의·미확인·수정 요청 */
     @Transactional(readOnly = true)
     public List<ReviewResponse> reviews(Long minutesId, Long userId) {
         Minutes minutes = access.require(minutesId);
         access.requireViewable(minutes, userId);
         List<MinutesReview> reviews = reviewRepository.findByMinutesIdOrderById(minutesId);
-        Map<Long, UserSummary> users = userClient.findUsers(reviews.stream().map(MinutesReview::getUserId).toList());
+        Map<Long, UserSummary> users = userClient.findUsers(reviews.stream().map(MinutesReview::getUserId).toList(),
+                minutes.getWorkspaceId());
         return reviews.stream()
                 .map(review -> new ReviewResponse(PersonResponse.of(review.getUserId(), users.get(review.getUserId())),
                         review.getStatus(), review.getDecidedAt()))
                 .toList();
     }
 
-    /** REQ-107, 110. 검토 대상 참석자, 검토 중. 모두 동의하면 자동 확정 */
+    /** REQ-107 (레거시), 110. 검토 대상 참석자, 검토 중. 모두 동의하면 자동 확정 */
     @Transactional
     public void approve(Long minutesId, Long userId) {
         Minutes minutes = access.requireForUpdate(minutesId);
@@ -106,7 +108,7 @@ public class ReviewService {
         }
     }
 
-    /** REQ-108. 검토 대상 참석자, 검토 중. 고른 문장에 의견을 남기면 내 검토는 수정 요청이 된다 */
+    /** REQ-108 (레거시). 검토 대상 참석자, 검토 중. 고른 문장에 의견을 남기면 내 검토는 수정 요청이 된다 */
     @Transactional
     public CommentResponse comment(Long minutesId, Long userId, CommentRequest request) {
         Minutes minutes = access.requireForUpdate(minutesId);
@@ -118,7 +120,7 @@ public class ReviewService {
         MinutesComment comment = commentRepository.save(new MinutesComment(minutesId, request.sectionId(),
                 request.quote(), request.body(), userId, now));
         review.decide(ReviewStatus.CHANGES_REQUESTED, now);
-        return toResponse(comment, userClient.findUsers(List.of(userId)));
+        return toResponse(comment, userClient.findUsers(List.of(userId), minutes.getWorkspaceId()));
     }
 
     @Transactional(readOnly = true)
@@ -126,11 +128,12 @@ public class ReviewService {
         Minutes minutes = access.require(minutesId);
         access.requireViewable(minutes, userId);
         List<MinutesComment> comments = commentRepository.findByMinutesIdOrderById(minutesId);
-        Map<Long, UserSummary> users = userClient.findUsers(comments.stream().map(MinutesComment::getAuthorUserId).toList());
+        Map<Long, UserSummary> users = userClient.findUsers(comments.stream().map(MinutesComment::getAuthorUserId).toList(),
+                minutes.getWorkspaceId());
         return comments.stream().map(comment -> toResponse(comment, users)).toList();
     }
 
-    /** REQ-108. 작성자가 코멘트를 반영했다고 표시 */
+    /** REQ-108 (레거시). 작성자가 코멘트를 반영했다고 표시 */
     @Transactional
     public void resolveComment(Long minutesId, Long commentId, Long userId) {
         Minutes minutes = access.require(minutesId);
@@ -141,7 +144,21 @@ public class ReviewService {
         comment.resolve(LocalDateTime.now(clock));
     }
 
-    /** REQ-107. 작성자, 검토 중. 동의하지 않은 참석자가 있어도 확정할 수 있다 */
+    /**
+     * REQ-136 작성 완료. 작성자가 작성 중(또는 레거시 검토 중)인 회의록을 바로 확정하고 참석자에게 공유한다
+     * (확정 알림·메일은 notification-service가 MinutesConfirmed로 보낸다).
+     */
+    @Transactional
+    public void complete(Long minutesId, Long userId) {
+        Minutes minutes = access.requireForUpdate(minutesId);
+        access.requireWriter(minutes, userId);
+        if (minutes.is(MinutesStatus.CONFIRMED)) {
+            throw new BusinessException(MinutesErrorCode.MINUTES_ALREADY_CONFIRMED);
+        }
+        confirm(minutes, userId);
+    }
+
+    /** REQ-107 (레거시). 작성자, 검토 중. 동의하지 않은 참석자가 있어도 확정할 수 있다 */
     @Transactional
     public void confirmByWriter(Long minutesId, Long userId) {
         Minutes minutes = access.requireForUpdate(minutesId);
@@ -155,7 +172,7 @@ public class ReviewService {
         confirm(minutes, userId);
     }
 
-    /** REQ-110, 112. 확정하고 참석자 알림·메일·회의 목록 표시용 이벤트를 남긴다 */
+    /** REQ-110 (레거시), 112. 확정하고 참석자 알림·메일·회의 목록 표시용 이벤트를 남긴다 */
     private void confirm(Minutes minutes, Long confirmedByUserId) {
         LocalDateTime now = LocalDateTime.now(clock);
         minutes.confirm(now, confirmedByUserId);

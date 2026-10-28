@@ -44,8 +44,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 아카이브 목록·검색·필터, 즐겨찾기·중요 표시 (REQ-053~056), 최근 본 회의록 (REQ-146),
- * 홈의 검토 대기·최근 확정·작성 중 (REQ-021~023, 026~027, 142).
+ * 아카이브 목록·검색·필터, 즐겨찾기·중요 표시 (REQ-053~055, 056(레거시)), 최근 본 회의록 (REQ-159),
+ * 홈의 검토 대기·최근 확정·작성 중 (REQ-021~023·026~027 레거시, 149~150).
  */
 @Service
 @RequiredArgsConstructor
@@ -67,7 +67,7 @@ public class ArchiveService {
     private final UserClient userClient;
     private final Clock clock;
 
-    /** REQ-053~056. 폴더의 회의록 전체(작성 중·검토 중·확정), 회의 날짜 최신순. 필터(기간·참석자·장소)는 함께 쓸 수 있다 */
+    /** REQ-053~055, 056(레거시). 폴더의 회의록 전체(작성 중·검토 중·확정), 회의 날짜 최신순. 필터(기간·참석자·장소)는 함께 쓸 수 있다 */
     @Transactional(readOnly = true)
     public ArchivePageResponse folderMinutes(Long folderId, Long userId, String query, LocalDate from, LocalDate to,
                                              String location, Long attendeeId, MarkFilter mark, int page, int size) {
@@ -121,7 +121,7 @@ public class ArchiveService {
                 .collect(Collectors.groupingBy(MinutesAttendee::getMinutesId,
                         Collectors.mapping(MinutesAttendee::getUserId, Collectors.toList())));
         Map<Long, UserSummary> users = userClient.findUsers(
-                attendees.values().stream().flatMap(List::stream).distinct().toList());
+                attendees.values().stream().flatMap(List::stream).distinct().toList(), workspaceId);
         List<WorkspaceArchiveItemResponse> items = result.ids().stream()
                 .map(found::get)
                 .map(minutes -> {
@@ -146,7 +146,7 @@ public class ArchiveService {
         return folders.isEmpty() ? List.of() : minutesRepository.findLocationsByFolderIdIn(folders.keySet());
     }
 
-    /** REQ-146. 회의록을 열 때마다 부른다 */
+    /** REQ-159. 회의록을 열 때마다 부른다 */
     @Transactional
     public void view(Long minutesId, Long userId) {
         Minutes minutes = access.require(minutesId);
@@ -157,7 +157,7 @@ public class ArchiveService {
                 () -> viewRepository.save(new MinutesView(userId, minutesId, now)));
     }
 
-    /** REQ-146. 워크스페이스에서 최근 본 회의록, 최근 본 순. 더는 볼 수 없는 회의록은 뺀다 */
+    /** REQ-159. 워크스페이스에서 최근 본 회의록, 최근 본 순. 더는 볼 수 없는 회의록은 뺀다 */
     @Transactional(readOnly = true)
     public List<ViewedMinutesResponse> viewed(Long workspaceId, Long userId, int size) {
         Map<Long, AccessibleFolder> folders = foldersOf(workspaceId, userId);
@@ -179,7 +179,7 @@ public class ArchiveService {
                 .toList();
     }
 
-    /** REQ-142. 내가 작성자인 작성 중 회의록, 회의 날짜가 오래된 순. 들어갈 수 없게 된 폴더의 회의록은 뺀다 */
+    /** REQ-149~150. 내가 작성자인 작성 중 회의록, 회의 날짜가 오래된 순. 들어갈 수 없게 된 폴더의 회의록은 뺀다 */
     @Transactional(readOnly = true)
     public List<WritingMinutesResponse> writing(Long userId) {
         List<Minutes> writing = minutesRepository.findByWriterUserIdAndStatusOrderByMeetingStartAtAscIdAsc(userId,
@@ -199,7 +199,7 @@ public class ArchiveService {
                 .toList();
     }
 
-    /** REQ-056. 회의록을 볼 수 있는 사람, 내 표시만 바꾼다 */
+    /** REQ-056 (레거시). 회의록을 볼 수 있는 사람, 내 표시만 바꾼다 */
     @Transactional
     public void mark(Long minutesId, Long userId, MarksRequest request) {
         Minutes minutes = access.require(minutesId);
@@ -209,7 +209,7 @@ public class ArchiveService {
         mark.change(request.favorite(), request.important());
     }
 
-    /** REQ-021~023. 내가 검토할(미확인·수정 요청) 검토 중 회의록, 회의 날짜가 오래된 순 */
+    /** REQ-021~023 (레거시). 내가 검토할(미확인·수정 요청) 검토 중 회의록, 회의 날짜가 오래된 순 */
     @Transactional(readOnly = true)
     public ReviewRequestsResponse reviewRequests(Long userId) {
         Map<Long, ReviewStatus> myStatus = reviewRepository.findByUserIdAndStatusIn(userId, WAITING_FOR_ME).stream()
@@ -224,7 +224,7 @@ public class ArchiveService {
         return new ReviewRequestsResponse(items.size(), items);
     }
 
-    /** REQ-026~027. 내가 들어갈 수 있는 모든 폴더의 확정 회의록, 최근 확정 순 */
+    /** REQ-026~027 (레거시). 내가 들어갈 수 있는 모든 폴더의 확정 회의록, 최근 확정 순 */
     @Transactional(readOnly = true)
     public List<RecentMinutesResponse> recent(Long userId, int size) {
         Map<Long, AccessibleFolder> folders = accessibleFolders(userId);

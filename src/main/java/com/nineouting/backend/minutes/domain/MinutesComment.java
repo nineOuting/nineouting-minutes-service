@@ -11,7 +11,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 검토 코멘트 (REQ-108): 고른 문장(quote)에 남긴 의견. 작성자가 반영하면 해결 표시 */
+/** 검토 코멘트 (REQ-108 레거시): 고른 문장(quote)에 남긴 의견. 작성자가 반영하면 해결 표시 */
 @Getter
 @Entity
 @Table(name = "minutes_comments")

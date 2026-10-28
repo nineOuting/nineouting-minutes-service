@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 아카이브(REQ-053~056, 146)와 홈(REQ-021~023, 026~027, 142) */
+/** 아카이브(REQ-053~055, 056(레거시), 146)와 홈(REQ-021~023 레거시, 026~027, 142) */
 @RestController
 @RequiredArgsConstructor
 public class ArchiveController {
@@ -35,7 +35,7 @@ public class ArchiveController {
 
     private final ArchiveService archiveService;
 
-    /** REQ-053~056. q: 회의명·내용, from·to: 회의 날짜, location: 장소(일부만 맞아도 됨), attendeeId, mark: FAVORITE / IMPORTANT */
+    /** REQ-053~055, 056(레거시). q: 회의명·내용, from·to: 회의 날짜, location: 장소(일부만 맞아도 됨), attendeeId, mark: FAVORITE / IMPORTANT */
     @GetMapping("/api/folders/{folderId}/minutes")
     public ApiResponse<ArchivePageResponse> folderMinutes(@CurrentUser AuthenticatedUser user, @PathVariable Long folderId,
                                                           @RequestParam(required = false) String q,
@@ -72,27 +72,27 @@ public class ArchiveController {
         return ApiResponse.ok(archiveService.locations(workspaceId, user.userId()));
     }
 
-    /** REQ-146 회의록을 열 때마다 부른다 */
+    /** REQ-159 회의록을 열 때마다 부른다 */
     @PostMapping("/api/minutes/{minutesId}/view")
     public ApiResponse<Void> view(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         archiveService.view(minutesId, user.userId());
         return ApiResponse.ok();
     }
 
-    /** REQ-146 */
+    /** REQ-159 */
     @GetMapping("/api/workspaces/{workspaceId}/viewed-minutes")
     public ApiResponse<List<ViewedMinutesResponse>> viewed(@CurrentUser AuthenticatedUser user, @PathVariable Long workspaceId,
                                                            @RequestParam(defaultValue = DEFAULT_VIEWED_SIZE) int size) {
         return ApiResponse.ok(archiveService.viewed(workspaceId, user.userId(), size));
     }
 
-    /** REQ-142 */
+    /** REQ-149~150 */
     @GetMapping("/api/users/me/writing-minutes")
     public ApiResponse<List<WritingMinutesResponse>> writing(@CurrentUser AuthenticatedUser user) {
         return ApiResponse.ok(archiveService.writing(user.userId()));
     }
 
-    /** REQ-056 */
+    /** REQ-056 (레거시) */
     @PutMapping("/api/minutes/{minutesId}/marks")
     public ApiResponse<Void> mark(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId,
                                   @RequestBody MarksRequest request) {
@@ -100,13 +100,13 @@ public class ArchiveController {
         return ApiResponse.ok();
     }
 
-    /** REQ-021~023 */
+    /** REQ-021~023 (레거시) */
     @GetMapping("/api/users/me/review-requests")
     public ApiResponse<ReviewRequestsResponse> reviewRequests(@CurrentUser AuthenticatedUser user) {
         return ApiResponse.ok(archiveService.reviewRequests(user.userId()));
     }
 
-    /** REQ-026~027 */
+    /** REQ-026~027 (레거시) */
     @GetMapping("/api/users/me/recent-minutes")
     public ApiResponse<List<RecentMinutesResponse>> recent(@CurrentUser AuthenticatedUser user,
                                                            @RequestParam(defaultValue = DEFAULT_RECENT_SIZE) int size) {

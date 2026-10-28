@@ -122,7 +122,7 @@ public class MinutesService {
     }
 
     /**
-     * REQ-104, 111. 작성자만, 작성 중·검토 중·확정 모두 가능 (확정 후에는 다시 검토하지 않는다).
+     * REQ-104 (레거시), 111. 작성자만, 작성 중·검토 중·확정 모두 가능 (확정 후에는 다시 검토하지 않는다).
      * 요청의 version이 지금과 다르면 다른 곳에서 먼저 저장한 것이므로 거절한다.
      */
     @Transactional
@@ -154,13 +154,14 @@ public class MinutesService {
         return detail(minutes, userId);
     }
 
-    /** REQ-104. 수정한 사람·시각 (최근 순) */
+    /** REQ-104 (레거시). 수정한 사람·시각 (최근 순) */
     @Transactional(readOnly = true)
     public List<RevisionResponse> revisions(Long minutesId, Long userId) {
         Minutes minutes = access.require(minutesId);
         access.requireViewable(minutes, userId);
         List<MinutesRevision> revisions = revisionRepository.findByMinutesIdOrderByVersionDesc(minutesId);
-        Map<Long, UserSummary> users = userClient.findUsers(revisions.stream().map(MinutesRevision::getEditorUserId).toList());
+        Map<Long, UserSummary> users = userClient.findUsers(revisions.stream().map(MinutesRevision::getEditorUserId).toList(),
+                minutes.getWorkspaceId());
         return revisions.stream()
                 .map(revision -> new RevisionResponse(revision.getVersion(),
                         PersonResponse.of(revision.getEditorUserId(), users.get(revision.getEditorUserId())),
@@ -172,7 +173,7 @@ public class MinutesService {
         List<Long> attendeeIds = attendeeRepository.findByMinutesIdOrderById(minutes.getId()).stream()
                 .map(MinutesAttendee::getUserId)
                 .toList();
-        Map<Long, UserSummary> users = userClient.findUsers(attendeeIds);
+        Map<Long, UserSummary> users = userClient.findUsers(attendeeIds, minutes.getWorkspaceId());
         Optional<MinutesMark> mark = markRepository.findByMinutesIdAndUserId(minutes.getId(), viewerId);
         return new MinutesDetailResponse(
                 minutes.getId(), minutes.getMeetingId(), minutes.getWorkspaceId(), minutes.getFolderId(),

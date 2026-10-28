@@ -23,11 +23,11 @@ public interface MinutesRepository extends JpaRepository<Minutes, Long> {
     @Query("select m from Minutes m where m.id = :id")
     Optional<Minutes> findByIdForUpdate(Long id);
 
-    /** 최근 확정 (REQ-026) */
+    /** 최근 확정 (REQ-026, 레거시) */
     List<Minutes> findByFolderIdInAndStatusOrderByConfirmedAtDescIdDesc(Collection<Long> folderIds, MinutesStatus status,
                                                                        Pageable pageable);
 
-    /** 홈의 작성 중인 회의록 (REQ-142) */
+    /** 홈의 작성 중인 회의록 (REQ-149~150) */
     List<Minutes> findByWriterUserIdAndStatusOrderByMeetingStartAtAscIdAsc(Long writerUserId, MinutesStatus status);
 
     /** 아카이브 장소 필터의 선택지 (REQ-055) */
