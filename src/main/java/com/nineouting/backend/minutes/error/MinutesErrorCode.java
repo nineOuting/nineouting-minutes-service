@@ -21,7 +21,10 @@ public enum MinutesErrorCode implements ErrorCode {
     MINUTES_NOT_REVIEWING(HttpStatus.CONFLICT, "검토 중인 회의록이 아닙니다"),
     MINUTES_ALREADY_CONFIRMED(HttpStatus.CONFLICT, "이미 확정된 회의록입니다"),
     MINUTES_VERSION_CONFLICT(HttpStatus.CONFLICT, "다른 곳에서 먼저 저장했습니다. 새로고침 후 다시 저장해 주세요"),
-    TEMPLATE_NOT_EDITABLE(HttpStatus.FORBIDDEN, "기본 양식은 고칠 수 없습니다");
+    TEMPLATE_NOT_EDITABLE(HttpStatus.FORBIDDEN, "기본 양식은 고칠 수 없습니다"),
+    MINUTES_TEMPLATE_REQUIRED(HttpStatus.CONFLICT, "양식을 먼저 골라 주세요"),
+    DRAFT_SOURCE_NOT_READY(HttpStatus.CONFLICT, "오늘 회의 요약이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요"),
+    DRAFT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "지금은 AI 초안을 만들 수 없습니다. 잠시 후 다시 시도해 주세요");
 
     private final HttpStatus status;
     private final String message;

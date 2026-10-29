@@ -29,6 +29,12 @@ nineouting:
   inbox:
     # 이 서비스 큐. 받는 이벤트는 SNS 구독이 정한다: meeting.finished, meeting.moved, workspace.folder-deleted
     queue: ${SQS_QUEUE_URL:http://localhost:4566/000000000000/nineouting-local-minutes-service.fifo}
+  minutes:
+    # AI 회의록 초안 (REQ-101~103). ai-service 주소를 비우면 요청하지 않는다
+    draft:
+      ai-service-url: ${AI_SERVICE_URL:}
+      meeting-service-url: ${MEETING_SERVICE_URL:http://localhost:8083}
+      callback-base-url: ${MINUTES_CALLBACK_BASE_URL:http://localhost:8084}   # ai-service가 결과를 보낼 이 서비스 주소
   clients:
     user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
     workspace-service-url: ${WORKSPACE_SERVICE_URL:http://localhost:8082}
