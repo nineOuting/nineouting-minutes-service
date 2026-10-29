@@ -18,7 +18,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 public class SecurityConfig {
 
-    private static final String[] PUBLIC_PATHS = {"/actuator/health", "/actuator/health/**", "/actuator/prometheus"};
+    // /internal/**: ai-service 콜백 등 서비스 간 주소. Gateway가 밖으로 넘기지 않는다 (meeting-service와 같다)
+    private static final String[] PUBLIC_PATHS = {"/actuator/health", "/actuator/health/**", "/actuator/prometheus",
+            "/internal/**"};
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter,

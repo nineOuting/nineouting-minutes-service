@@ -8,6 +8,7 @@ import com.nineouting.backend.minutes.dto.MinutesDetailResponse;
 import com.nineouting.backend.minutes.dto.RevisionResponse;
 import com.nineouting.backend.minutes.dto.SaveSectionsRequest;
 import com.nineouting.backend.minutes.dto.SelectTemplateRequest;
+import com.nineouting.backend.minutes.service.DraftService;
 import com.nineouting.backend.minutes.service.MinutesExportService;
 import com.nineouting.backend.minutes.service.MinutesService;
 import com.nineouting.backend.minutes.service.ReviewService;
@@ -35,6 +36,7 @@ public class MinutesController {
     private final MinutesService minutesService;
     private final MinutesExportService exportService;
     private final ReviewService reviewService;
+    private final DraftService draftService;
 
     /** REQ-020: 회의에서 회의록으로 이동 */
     @GetMapping("/api/meetings/{meetingId}/minutes")
@@ -65,6 +67,16 @@ public class MinutesController {
     public ApiResponse<Void> complete(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
         reviewService.complete(minutesId, user.userId());
         return ApiResponse.ok();
+    }
+
+    /**
+     * REQ-101~103 AI 초안 (다시) 요청. 양식을 처음 고르면 자동으로 요청하므로, 실패했을 때 다시 누른다.
+     * 결과가 오기 전에는 draftStatus가 REQUESTED(화면 "준비 중")
+     */
+    @PostMapping("/api/minutes/{minutesId}/draft")
+    public ApiResponse<MinutesDetailResponse> requestDraft(@CurrentUser AuthenticatedUser user, @PathVariable Long minutesId) {
+        draftService.request(minutesId, user.userId());
+        return ApiResponse.ok(minutesService.get(minutesId, user.userId()));
     }
 
     /** REQ-140 양식 변경 (REQ-100에서 이어짐) */

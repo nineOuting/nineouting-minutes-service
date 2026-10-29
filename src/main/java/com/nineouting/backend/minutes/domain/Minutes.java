@@ -74,6 +74,22 @@ public class Minutes extends BaseTimeEntity {
     @Column(name = "search_text", nullable = false, columnDefinition = "TEXT")
     private String searchText;
 
+    /** AI 회의록 초안 (REQ-101~103). 요청한 적 없으면 null */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "draft_status", length = 20)
+    private DraftStatus draftStatus;
+
+    /** 지금 기다리는 초안 요청 번호. 이 번호의 결과만 받는다 */
+    @Column(name = "draft_request_id", length = 36)
+    private String draftRequestId;
+
+    /** 실패했을 때 ai-service 오류 코드 */
+    @Column(name = "draft_error", length = 100)
+    private String draftError;
+
+    @Column(name = "draft_requested_at")
+    private LocalDateTime draftRequestedAt;
+
     public Minutes(Long meetingId, Long workspaceId, Long folderId, String title, LocalDateTime meetingStartAt,
                    String location, Long writerUserId) {
         this.meetingId = meetingId;
@@ -117,5 +133,21 @@ public class Minutes extends BaseTimeEntity {
 
     public void moveTo(Long folderId) {
         this.folderId = folderId;
+    }
+
+    public void draftRequested(String requestId, LocalDateTime now) {
+        this.draftStatus = DraftStatus.REQUESTED;
+        this.draftRequestId = requestId;
+        this.draftError = null;
+        this.draftRequestedAt = now;
+    }
+
+    public void draftSucceeded() {
+        this.draftStatus = DraftStatus.SUCCEEDED;
+    }
+
+    public void draftFailed(String error) {
+        this.draftStatus = DraftStatus.FAILED;
+        this.draftError = error == null ? null : error.substring(0, Math.min(error.length(), 100));
     }
 }

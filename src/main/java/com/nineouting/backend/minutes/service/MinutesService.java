@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -62,6 +63,7 @@ public class MinutesService {
     private final OutboxEventWriter outboxEventWriter;
     private final UserClient userClient;
     private final JsonMapper jsonMapper;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     /** 회의 마무리(REQ-098)를 받아 작성 중인 회의록을 만든다. 같은 회의는 한 번만 만든다. */
@@ -117,7 +119,12 @@ public class MinutesService {
             sections.add(sectionRepository.save(new MinutesSection(minutesId, item.getPosition(), item.getTitle(),
                     contents.getOrDefault(item.getTitle(), ""))));
         }
+        boolean firstTemplate = minutes.getTemplateId() == null;
         recordRevision(minutes, template.getId(), sections, userId);
+        if (firstTemplate) {
+            // 양식을 처음 고르면 저장이 끝난 뒤 AI 초안을 요청한다 (REQ-101, DraftService)
+            events.publishEvent(new TemplateSelected(minutesId));
+        }
         return detail(minutes, userId);
     }
 
@@ -184,7 +191,16 @@ public class MinutesService {
                 sectionRepository.findByMinutesIdOrderByPosition(minutes.getId()).stream().map(SectionResponse::from).toList(),
                 mark.map(MinutesMark::isFavorite).orElse(false),
                 mark.map(MinutesMark::isImportant).orElse(false),
-                minutes.getConfirmedAt(), minutes.getConfirmedByUserId());
+                minutes.getConfirmedAt(), minutes.getConfirmedByUserId(), minutes.getDraftStatus(), minutes.getDraftError());
+    }
+
+    /** AI 초안으로 빈 칸을 채웠다 (DraftService). 작성자가 고친 것처럼 저장 기록을 남긴다 */
+    void recordDraft(Minutes minutes, List<MinutesSection> sections) {
+        recordRevision(minutes, null, sections, minutes.getWriterUserId());
+    }
+
+    /** 회의록의 양식을 처음 골랐다 */
+    public record TemplateSelected(Long minutesId) {
     }
 
     /** REQ-111. 확정된 회의록을 고치면 참석자에게 알린다 (notification이 고친 사람은 뺀다) */
