@@ -1,0 +1,40 @@
+server:
+  port: ${SERVER_PORT:8084}
+
+spring:
+  application:
+    name: minutes-service
+  config:
+    import: classpath:observability/defaults.yml
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5437/minutes_db}
+    username: ${DB_USERNAME:minutes_service}
+    password: ${DB_PASSWORD:minutes_service}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate   # 스키마는 Flyway만 바꾼다
+nineouting:
+  # 이벤트는 SNS로 보내고 서비스 큐(SQS)로 받는다. 자격 증명은 AWS SDK 기본 방식 (EKS는 IRSA, 로컬은 LocalStack)
+  messaging:
+    region: ${AWS_REGION:ap-northeast-2}
+    endpoint: ${AWS_ENDPOINT_URL:}          # 비우면 AWS. 로컬은 LocalStack (http://localhost:4566)
+    access-key: ${MESSAGING_ACCESS_KEY:}    # 비우면 AWS 기본 자격 증명. LocalStack은 test
+    secret-key: ${MESSAGING_SECRET_KEY:}
+  outbox:
+    topic-prefix: ${SNS_TOPIC_PREFIX:arn:aws:sns:ap-northeast-2:000000000000:nineouting-local-}
+  security:
+    jwt:
+      jwks-uri: ${JWT_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+  inbox:
+    # 이 서비스 큐. 받는 이벤트는 SNS 구독이 정한다: meeting.finished, meeting.moved, workspace.folder-deleted
+    queue: ${SQS_QUEUE_URL:http://localhost:4566/000000000000/nineouting-local-minutes-service.fifo}
+  minutes:
+    # AI 회의록 초안 (REQ-101~103). ai-service 주소를 비우면 요청하지 않는다
+    draft:
+      ai-service-url: ${AI_SERVICE_URL:}
+      meeting-service-url: ${MEETING_SERVICE_URL:http://localhost:8083}
+      callback-base-url: ${MINUTES_CALLBACK_BASE_URL:http://localhost:8084}   # ai-service가 결과를 보낼 이 서비스 주소
+  clients:
+    user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+    workspace-service-url: ${WORKSPACE_SERVICE_URL:http://localhost:8082}

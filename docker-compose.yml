@@ -1,28 +1,33 @@
 # minutes-service 로컬 개발용 의존 서비스.
 #   docker compose up -d   → 이후 ./gradlew bootRun --args='--spring.profiles.active=local'
 # user-service(토큰 공개키, 사용자 이름)·workspace-service(폴더 권한)도 함께 띄워야 한다. 여러 서비스를 함께 띄우는 것은 nineouting-docs/integration에서 한다.
-# 주의: Kafka가 9092를 쓰므로 user-service의 compose와 동시에 띄우면 Kafka가 겹친다. 하나만 띄워 함께 쓴다.
+# 주의: LocalStack이 4566을 쓰므로 다른 서비스의 compose와 동시에 띄우면 겹친다. 하나만 띄워 함께 쓴다 (토픽·큐 전체를 만든다).
 services:
-  mysql:
-    image: mysql:8.4
+  postgres:
+    image: postgres:17.6-alpine
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: minutes_db
-      MYSQL_USER: ${DB_USERNAME:-minutes_service}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-minutes_service}
+      POSTGRES_DB: minutes_db
+      POSTGRES_USER: ${DB_USERNAME:-minutes_service}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-minutes_service}
     ports:
-      - "3311:3306"   # user(3307)·workspace(3308)·notification(3309)·meeting(3310)과 겹치지 않게
+      - "5437:5432"   # user(5433)·workspace(5434)·notification(5435)·meeting(5436)과 겹치지 않게
     volumes:
-      - mysql-data:/var/lib/mysql
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "pg_isready", "-U", "minutes_service", "-d", "minutes_db"]
       interval: 5s
       retries: 10
 
-  kafka:
-    image: apache/kafka:3.9.1   # KRaft 단일 브로커, localhost:9092
+  localstack:
+    # 로컬용 AWS SNS·SQS (이벤트). 토픽·큐·구독은 init-sns-sqs.sh가 만든다 (운영은 Terraform)
+    image: localstack/localstack:4.4
+    environment:
+      SERVICES: sns,sqs
+      AWS_DEFAULT_REGION: ap-northeast-2
     ports:
-      - "9092:9092"
+      - "4566:4566"
+    volumes:
+      - ./docker/localstack/init-sns-sqs.sh:/etc/localstack/init/ready.d/init-sns-sqs.sh:ro
 
 volumes:
-  mysql-data:
+  postgres-data:

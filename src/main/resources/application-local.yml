@@ -1,0 +1,6 @@
+# 로컬 개발: docker-compose의 LocalStack으로 이벤트를 보내고 받는다 (토픽·큐는 init-sns-sqs.sh가 만든다)
+nineouting:
+  messaging:
+    endpoint: http://localhost:4566
+    access-key: test
+    secret-key: test
