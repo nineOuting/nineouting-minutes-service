@@ -19,10 +19,11 @@ RUN --mount=type=secret,id=gpr_actor --mount=type=secret,id=gpr_token \
     ./gradlew bootJar --no-daemon -x test
 
 # --- 실행 ---
-FROM eclipse-temurin:21-jre AS run
+# 실행은 Alpine판 JRE: 패키지가 Ubuntu판의 절반이라 보안 검사에 걸릴 거리가 적다 (wget은 busybox로 들어 있다)
+FROM eclipse-temurin:21-jre-alpine AS run
 WORKDIR /app
 
-RUN groupadd --system app && useradd --system --gid app --no-create-home app
+RUN addgroup -S app && adduser -S -G app -H app
 
 COPY --from=build /workspace/build/libs/*.jar app.jar
 
