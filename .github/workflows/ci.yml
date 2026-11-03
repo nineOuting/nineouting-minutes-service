@@ -33,6 +33,8 @@ jobs:
   # dev에 머지되면 이미지를 GitHub 컨테이너 저장소(ghcr.io)에 올린다.
   # 팀원은 nineouting-infra의 integration/으로 이 이미지를 받아 전체 서비스를 띄운다.
   image:
+    outputs:
+      image_digest: ${{ steps.publish.outputs.digest }}
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
@@ -56,6 +58,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
+        id: publish
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -71,3 +74,177 @@ jobs:
             gpr_token=${{ secrets.GPR_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  sandbox-ecr:
+    name: Verify and publish Sandbox ECR image
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-2
+      EXPECTED_ACCOUNT: '904140717603'
+      SOURCE_IMAGE: ghcr.io/nineouting/nineouting-minutes-service
+      SOURCE_DIGEST: ${{ needs.image.outputs.image_digest }}
+      TARGET_IMAGE: 904140717603.dkr.ecr.ap-northeast-2.amazonaws.com/nineouting-sandbox-minutes
+
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to existing GHCR image
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Authenticate to Sandbox with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::904140717603:role/nineouting-sandbox-minutes-github
+          aws-region: ap-northeast-2
+          role-session-name: gha-${{ github.run_id }}
+
+      - name: Check account
+        shell: bash
+        run: |
+          set -euo pipefail
+          account=$(aws sts get-caller-identity --query Account --output text)
+          test "$account" = "$EXPECTED_ACCOUNT"
+          echo "AWS account verified: $account"
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Publish and verify AMD64 image in ECR
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # 1. 이번 CI에서 생성한 이미지 Digest 검증
+          [[ "$SOURCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          source="$SOURCE_IMAGE@$SOURCE_DIGEST"
+          tag="sha-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          target="$TARGET_IMAGE:$tag"
+
+          # 2. GHCR의 멀티 아키텍처 Manifest 조회
+          docker buildx imagetools inspect --raw "$source" \
+            > ghcr-index.json
+
+          # 3. EKS에서 사용할 AMD64 Manifest만 선택
+          amd64_digest=$(jq -er '
+            [
+              .manifests[]
+              | select(
+                  .platform.os == "linux"
+                  and .platform.architecture == "amd64"
+                )
+              | .digest
+            ]
+            | if length == 1
+              then .[0]
+              else error("Expected exactly one linux/amd64 image")
+              end
+          ' ghcr-index.json)
+
+          [[ "$amd64_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          # 원본 AMD64 이미지 Manifest 저장
+          docker buildx imagetools inspect --raw \
+            "$SOURCE_IMAGE@$amd64_digest" \
+            > ghcr-amd64-manifest.json
+
+          # 4. GHCR의 AMD64 이미지를 ECR로 복사
+          # 단일 플랫폼 Manifest 형식 유지
+          docker buildx imagetools create \
+            --prefer-index=false \
+            --tag "$target" \
+            "$SOURCE_IMAGE@$amd64_digest"
+
+          # 5. ECR에 게시된 이미지 Digest 확인
+          docker buildx imagetools inspect "$target" \
+            > ecr-manifest.txt
+
+          digest=$(awk '$1 == "Digest:" {print $2; exit}' \
+            ecr-manifest.txt)
+
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          # ECR 레지스트리의 실제 Manifest 조회
+          docker buildx imagetools inspect --raw \
+            "$TARGET_IMAGE@$digest" \
+            > ecr-manifest-raw.json
+
+          # 6. GHCR 원본과 ECR 이미지 구성 비교
+          source_config=$(jq -er '.config.digest' \
+            ghcr-amd64-manifest.json)
+
+          target_config=$(jq -er '.config.digest' \
+            ecr-manifest-raw.json)
+
+          [[ "$source_config" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$target_config" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          if [[ "$source_config" != "$target_config" ]]; then
+            echo "::error::GHCR/ECR image config digest mismatch"
+            exit 1
+          fi
+
+          # 이미지 레이어 Digest 비교
+          source_layers=$(jq -c '[.layers[].digest]' \
+            ghcr-amd64-manifest.json)
+
+          target_layers=$(jq -c '[.layers[].digest]' \
+            ecr-manifest-raw.json)
+
+          if [[ "$source_layers" != "$target_layers" ]]; then
+            echo "::error::GHCR/ECR image layer mismatch"
+            exit 1
+          fi
+
+          # 7. 실제 ECR 이미지 다운로드 및 플랫폼 검증
+          docker pull --platform linux/amd64 \
+            "$TARGET_IMAGE@$digest"
+
+          target_platform=$(docker image inspect \
+            "$TARGET_IMAGE@$digest" \
+            --format '{{.Os}}/{{.Architecture}}')
+
+          if [[ "$target_platform" != "linux/amd64" ]]; then
+            echo "::error::ECR image is not linux/amd64"
+            exit 1
+          fi
+
+          # 8. GitOps 배포에서 사용할 이미지 주소 저장
+          image_uri="$TARGET_IMAGE@$digest"
+
+          printf 'image.repository=%s\nimage.digest=%s\nimage.tag=%s\nimage.uri=%s\n' \
+            "$TARGET_IMAGE" "$digest" "$tag" "$image_uri" \
+            > image-result.txt
+
+          # 9. GitHub Actions 실행 결과 요약
+          {
+            echo '## Sandbox ECR Publish PASS'
+            echo "- Source: $source"
+            echo "- Source AMD64 digest: $amd64_digest"
+            echo "- Target: $target"
+            echo "- ECR image: $image_uri"
+            echo "- Platform: $target_platform"
+            echo '- Registry image config/layers: MATCH'
+            echo '- Deployment: NOT RUN'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save verified image reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-ecr-image-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            image-result.txt
+            ecr-manifest.txt
+            ecr-manifest-raw.json
+          retention-days: 30
