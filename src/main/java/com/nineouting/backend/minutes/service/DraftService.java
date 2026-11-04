@@ -175,6 +175,9 @@ public class DraftService {
         template.set("fields", fields(minutes));
         body.set("agendas", source.path("agendas"));
         body.set("summary", source.path("summary"));
+        // 확정된 전사 줄. ai-service가 STT 오인식 교정의 표기 출처로만 쓴다 (선택 칸, 없으면 빈 목록)
+        JsonNode transcripts = source.path("transcripts");
+        body.set("transcripts", transcripts.isArray() ? transcripts : jsonMapper.createArrayNode());
         body.put("callbackUrl", properties.callbackBaseUrl() + "/internal/minutes/" + minutes.getId() + "/draft-result");
         return body;
     }

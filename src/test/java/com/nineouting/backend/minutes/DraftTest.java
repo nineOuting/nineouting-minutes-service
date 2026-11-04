@@ -79,6 +79,7 @@ class DraftTest extends ApiTestSupport {
         assertThat(JsonPath.<List<String>>read(request, "$.template.fields[*].type")).containsOnly("text");
         assertThat(JsonPath.<Object>read(request, "$.template.header")).isNull();
         assertThat(JsonPath.<String>read(request, "$.summary.agendas[0].status")).isEqualTo("DECIDED");
+        assertThat(JsonPath.<String>read(request, "$.transcripts[0].text")).isEqualTo("테라폼으로 올리죠");
         assertThat(JsonPath.<String>read(request, "$.callbackUrl"))
                 .isEqualTo("http://minutes-service:8084/internal/minutes/" + minutesId + "/draft-result");
         assertThat(JsonPath.<List<String>>read(request, "$.attendees[*].name")).contains("user" + writer);
@@ -165,7 +166,8 @@ class DraftTest extends ApiTestSupport {
                     {"success":true,"data":{"meetingId":%s,"ready":%s,
                      "agendas":[{"agendaId":101,"title":"배포 일정","decisionPoints":[{"decisionPointId":7,"position":1,"text":"배포 날짜"}]}],
                      "summary":{"agendas":[{"agendaId":101,"status":"DECIDED","statusReason":{"text":"30일","evidenceSeqs":[1]},
-                       "summary":[],"opinions":[],"todos":[]}]}}}""".formatted(meetingId, SOURCE_READY.get()));
+                       "summary":[],"opinions":[],"todos":[]}]},
+                     "transcripts":[{"seq":1,"text":"테라폼으로 올리죠","lowConfidence":false}]}}""".formatted(meetingId, SOURCE_READY.get()));
             return;
         }
         if (path.equals("/internal/minutes/drafts")) {
