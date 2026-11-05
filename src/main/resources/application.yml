@@ -10,6 +10,8 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5437/minutes_db}
     username: ${DB_USERNAME:minutes_service}
     password: ${DB_PASSWORD:minutes_service}
+    hikari:
+      maximum-pool-size: 5   # DB 연결 최대 5개 (기본 10). 서비스·파드가 늘어도 RDS 연결 한도를 넘지 않게
   jpa:
     open-in-view: false
     hibernate:
