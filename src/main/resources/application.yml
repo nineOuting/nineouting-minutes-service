@@ -35,6 +35,10 @@ nineouting:
       ai-service-url: ${AI_SERVICE_URL:}
       meeting-service-url: ${MEETING_SERVICE_URL:http://localhost:8083}
       callback-base-url: ${MINUTES_CALLBACK_BASE_URL:http://localhost:8084}   # ai-service가 결과를 보낼 이 서비스 주소
+      # 오늘 회의 요약이 아직 없으면 기다렸다가 요청한다: 이 주기로 확인하고, 한도를 넘으면 실패(DRAFT_SOURCE_TIMEOUT)
+      source-check-interval: 10s
+      source-wait: 10m
+      in-progress-guard: 2m   # 요청한 뒤 이 시간 안에는 다시 요청하지 못한다 (DRAFT_IN_PROGRESS)
   clients:
     user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
     workspace-service-url: ${WORKSPACE_SERVICE_URL:http://localhost:8082}

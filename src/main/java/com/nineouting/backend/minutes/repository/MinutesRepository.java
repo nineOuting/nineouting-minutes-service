@@ -23,6 +23,11 @@ public interface MinutesRepository extends JpaRepository<Minutes, Long> {
     @Query("select m from Minutes m where m.id = :id")
     Optional<Minutes> findByIdForUpdate(Long id);
 
+    /** 오늘 회의 요약을 기다리는 초안. 여러 인스턴스가 같은 회의록을 함께 요청하지 않게 잠긴 행은 건너뛴다 */
+    @Query(value = "select * from minutes where draft_status = 'WAITING_SOURCE' order by id limit :limit for update skip locked",
+            nativeQuery = true)
+    List<Minutes> lockWaitingForSource(int limit);
+
     /** 최근 확정 (REQ-026, 레거시) */
     List<Minutes> findByFolderIdInAndStatusOrderByConfirmedAtDescIdDesc(Collection<Long> folderIds, MinutesStatus status,
                                                                        Pageable pageable);

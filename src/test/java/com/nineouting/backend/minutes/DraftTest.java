@@ -47,6 +47,8 @@ class DraftTest extends ApiTestSupport {
         registry.add("nineouting.minutes.draft.ai-service-url", () -> url);
         registry.add("nineouting.minutes.draft.meeting-service-url", () -> url);
         registry.add("nineouting.minutes.draft.callback-base-url", () -> "http://minutes-service:8084");
+        registry.add("nineouting.minutes.draft.source-check-interval", () -> "200ms");
+        registry.add("nineouting.minutes.draft.source-wait", () -> "3s");
     }
 
     private Long writer;
@@ -115,27 +117,69 @@ class DraftTest extends ApiTestSupport {
     }
 
     @Test
-    void 실패하면_다시_요청할_수_있고_재료가_준비되지_않았으면_알려_준다() throws Exception {
+    void 만드는_중에는_다시_요청하지_못하고_실패하면_다시_요청할_수_있다() throws Exception {
         call(writer, post("/api/minutes/" + minutesId + "/draft"), null)
                 .andExpect(jsonPath("$.code").value("MINUTES_TEMPLATE_REQUIRED"));
-        SOURCE_READY.set(false);
         call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")
                 .andExpect(status().isOk());
+        String requestId = JsonPath.read(awaitDraftRequest(), "$.requestId");
         call(writer, post("/api/minutes/" + minutesId + "/draft"), null)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("DRAFT_SOURCE_NOT_READY"));
+                .andExpect(jsonPath("$.code").value("DRAFT_IN_PROGRESS"));
 
-        SOURCE_READY.set(true);
-        int before = DRAFT_REQUESTS.size();
-        call(newId(), post("/api/minutes/" + minutesId + "/draft"), null).andExpect(status().isForbidden());
-        call(writer, post("/api/minutes/" + minutesId + "/draft"), null)
-                .andExpect(jsonPath("$.data.draftStatus").value("REQUESTED"));
-        String requestId = JsonPath.read(DRAFT_REQUESTS.get(before), "$.requestId");
         callback("{\"requestId\":\"%s\",\"status\":\"FAILED\",\"error\":{\"code\":\"LLM_TIMEOUT\",\"message\":\"시간 초과\"}}"
                 .formatted(requestId));
         call(writer, get("/api/minutes/" + minutesId), null)
                 .andExpect(jsonPath("$.data.draftStatus").value("FAILED"))
                 .andExpect(jsonPath("$.data.draftError").value("LLM_TIMEOUT"));
+
+        int before = DRAFT_REQUESTS.size();
+        call(newId(), post("/api/minutes/" + minutesId + "/draft"), null).andExpect(status().isForbidden());
+        call(writer, post("/api/minutes/" + minutesId + "/draft"), null)
+                .andExpect(jsonPath("$.data.draftStatus").value("REQUESTED"));
+        assertThat(DRAFT_REQUESTS).hasSize(before + 1);
+    }
+
+    @Test
+    void 오늘_요약이_없으면_기다렸다가_오면_자동으로_요청한다() throws Exception {
+        SOURCE_READY.set(false);
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")
+                .andExpect(status().isOk());
+        awaitDraftStatus("WAITING_SOURCE");
+        call(writer, post("/api/minutes/" + minutesId + "/draft"), null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DRAFT_IN_PROGRESS"));
+
+        SOURCE_READY.set(true);
+        awaitDraftRequest();
+        awaitDraftStatus("REQUESTED");
+    }
+
+    @Test
+    void 오늘_요약이_한도_안에_오지_않으면_실패로_두고_다시_요청할_수_있다() throws Exception {
+        SOURCE_READY.set(false);
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")
+                .andExpect(status().isOk());
+        awaitDraftStatus("FAILED");
+        call(writer, get("/api/minutes/" + minutesId), null)
+                .andExpect(jsonPath("$.data.draftError").value("DRAFT_SOURCE_TIMEOUT"));
+
+        call(writer, post("/api/minutes/" + minutesId + "/draft"), null)
+                .andExpect(jsonPath("$.data.draftStatus").value("WAITING_SOURCE"));
+    }
+
+    private void awaitDraftStatus(String expected) throws Exception {
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        String actual = null;
+        while (System.nanoTime() < deadline) {
+            String detail = call(writer, get("/api/minutes/" + minutesId), null).andReturn().getResponse().getContentAsString();
+            actual = JsonPath.read(detail, "$.data.draftStatus");
+            if (expected.equals(actual)) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("초안 상태가 " + expected + "가 되지 않았습니다 (지금 " + actual + ")");
     }
 
     private void callback(String body) throws Exception {
