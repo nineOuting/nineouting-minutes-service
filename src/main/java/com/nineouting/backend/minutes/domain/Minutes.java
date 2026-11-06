@@ -142,6 +142,14 @@ public class Minutes extends BaseTimeEntity {
         this.draftRequestedAt = now;
     }
 
+    /** 기다리기 시작한 시각을 draftRequestedAt에 둔다 (기다리는 시간 한도의 기준) */
+    public void draftWaitingForSource(LocalDateTime now) {
+        this.draftStatus = DraftStatus.WAITING_SOURCE;
+        this.draftRequestId = null;
+        this.draftError = null;
+        this.draftRequestedAt = now;
+    }
+
     public void draftSucceeded() {
         this.draftStatus = DraftStatus.SUCCEEDED;
     }

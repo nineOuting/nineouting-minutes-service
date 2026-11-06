@@ -5,6 +5,7 @@ import com.nineouting.backend.common.client.UserSummary;
 import com.nineouting.backend.common.web.error.BusinessException;
 import com.nineouting.backend.minutes.client.DraftClient;
 import com.nineouting.backend.minutes.config.DraftProperties;
+import com.nineouting.backend.minutes.domain.DraftStatus;
 import com.nineouting.backend.minutes.domain.Minutes;
 import com.nineouting.backend.minutes.domain.MinutesAttendee;
 import com.nineouting.backend.minutes.domain.MinutesSection;
@@ -12,6 +13,7 @@ import com.nineouting.backend.minutes.domain.MinutesStatus;
 import com.nineouting.backend.minutes.domain.TemplateItem;
 import com.nineouting.backend.minutes.error.MinutesErrorCode;
 import com.nineouting.backend.minutes.repository.MinutesAttendeeRepository;
+import com.nineouting.backend.minutes.repository.MinutesRepository;
 import com.nineouting.backend.minutes.repository.MinutesSectionRepository;
 import com.nineouting.backend.minutes.repository.TemplateItemRepository;
 import com.nineouting.backend.minutes.repository.TemplateRepository;
@@ -25,6 +27,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +46,7 @@ import tools.jackson.databind.node.ObjectNode;
  *       채우지 못해(7.6 구현 전) 작성자가 채우는 칸으로 보낸다. 칸 설명·표의 열 개수·머리글·바닥글은 양식 그대로 (5.8, 2.1)</li>
  *   <li>표 칸은 주고받을 때 마크다운 표, 저장은 줄 = 행·탭 = 열 (회의록 작성 화면 형식)</li>
  *   <li>양식을 처음 고르면 자동으로 요청하고(REQ-101 "선택한 양식에 맞춰"), 실패하면 작성자가 다시 요청한다</li>
+ *   <li>오늘 회의 요약이 아직 없으면 기다리는 상태로 두고, 요약이 오면 자동으로 요청한다. 한도(10분)를 넘으면 실패로 둔다</li>
  *   <li>결과는 콜백으로 받아, 그사이 작성자가 쓴 칸은 덮어쓰지 않고 빈 칸만 채운다</li>
  * </ul>
  */
@@ -53,8 +57,13 @@ public class DraftService {
 
     /** 표 칸 저장 형식의 열 구분 (MinutesExportService와 같음) */
     private static final String CELL_SEPARATOR = "	";
+    /** 한 번에 확인하는 요약 기다리는 회의록 수 */
+    private static final int WAITING_BATCH_SIZE = 20;
+    /** 요약을 한도 안에 받지 못했을 때의 draftError */
+    private static final String DRAFT_SOURCE_TIMEOUT = "DRAFT_SOURCE_TIMEOUT";
 
     private final MinutesAccess access;
+    private final MinutesRepository minutesRepository;
     private final MinutesService minutesService;
     private final MinutesSectionRepository sectionRepository;
     private final MinutesAttendeeRepository attendeeRepository;
@@ -77,10 +86,13 @@ public class DraftService {
         if (minutes.getTemplateId() == null) {
             throw new BusinessException(MinutesErrorCode.MINUTES_TEMPLATE_REQUIRED);
         }
-        send(minutes);
+        if (isInProgress(minutes)) {
+            throw new BusinessException(MinutesErrorCode.DRAFT_IN_PROGRESS);
+        }
+        sendOrWait(minutes);
     }
 
-    /** 양식을 처음 고르면 저장이 끝난 뒤 자동으로 요청한다. 안 되면 기록만 하고 작성자가 다시 요청한다 */
+    /** 양식을 처음 고르면 저장이 끝난 뒤 자동으로 요청한다. 요약이 없으면 기다리고, 그 밖의 실패는 FAILED로 남긴다 */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onTemplateSelected(MinutesService.TemplateSelected event) {
@@ -92,10 +104,57 @@ public class DraftService {
             return;
         }
         try {
-            send(minutes);
+            sendOrWait(minutes);
         } catch (BusinessException e) {
             log.info("양식을 고른 뒤 초안을 바로 요청하지 못했습니다 (minutesId={}): {}", minutes.getId(), e.getMessage());
+            minutes.draftFailed(e.getErrorCode().getCode());
         }
+    }
+
+    /** 오늘 회의 요약을 기다리는 초안: 요약이 오면 요청하고, 한도를 넘으면 실패로 둔다 */
+    @Scheduled(fixedDelayString = "${nineouting.minutes.draft.source-check-interval:10s}")
+    @Transactional
+    public void requestWaitingDrafts() {
+        if (!properties.enabled()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        for (Minutes minutes : minutesRepository.lockWaitingForSource(WAITING_BATCH_SIZE)) {
+            if (!minutes.is(MinutesStatus.WRITING)) {
+                minutes.draftFailed(MinutesErrorCode.MINUTES_NOT_WRITING.getCode());
+                continue;
+            }
+            try {
+                send(minutes);
+            } catch (BusinessException e) {
+                if (!minutes.getDraftRequestedAt().plus(properties.sourceWait()).isAfter(now)) {
+                    boolean notReady = e.getErrorCode() == MinutesErrorCode.DRAFT_SOURCE_NOT_READY;
+                    log.info("초안 재료를 기다리다 한도를 넘었습니다 (minutesId={}): {}", minutes.getId(), e.getMessage());
+                    minutes.draftFailed(notReady ? DRAFT_SOURCE_TIMEOUT : e.getErrorCode().getCode());
+                }
+            }
+        }
+    }
+
+    /** 요약이 없으면 기다리는 상태로 두고, 그 밖의 실패는 그대로 던진다 */
+    private void sendOrWait(Minutes minutes) {
+        try {
+            send(minutes);
+        } catch (BusinessException e) {
+            if (e.getErrorCode() != MinutesErrorCode.DRAFT_SOURCE_NOT_READY) {
+                throw e;
+            }
+            minutes.draftWaitingForSource(LocalDateTime.now(clock));
+        }
+    }
+
+    /** 기다리는 중이거나, 요청한 지 한도 안이면 만드는 중으로 본다 */
+    private boolean isInProgress(Minutes minutes) {
+        if (minutes.getDraftStatus() == DraftStatus.WAITING_SOURCE) {
+            return true;
+        }
+        return minutes.getDraftStatus() == DraftStatus.REQUESTED
+                && minutes.getDraftRequestedAt().plus(properties.inProgressGuard()).isAfter(LocalDateTime.now(clock));
     }
 
     /** ai-service 결과 (POST /internal/minutes/{minutesId}/draft-result). 지금 기다리는 요청의 결과만 받는다 */
