@@ -47,6 +47,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation platform("software.amazon.awssdk:bom:2.55.0")
+    implementation 'software.amazon.awssdk:s3'   // 양식 배경 이미지 (REQ-157, 로컬은 LocalStack)
     implementation 'software.amazon.awssdk:sns'  // 이벤트 보내기 (outbox)
     implementation 'software.amazon.awssdk:sqs'  // 이벤트 받기 (inbox)
     implementation 'org.springframework.boot:spring-boot-starter-restclient'

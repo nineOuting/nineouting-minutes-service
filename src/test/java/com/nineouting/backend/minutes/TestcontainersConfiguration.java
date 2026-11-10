@@ -35,6 +35,7 @@ public class TestcontainersConfiguration {
 
     private static final KeyPair KEYS = Jwts.SIG.RS256.keyPair().build();
     private static final String KID = "test-key";
+    static final String TEST_BUCKET = "nineouting-test";
 
     @Bean
     @ServiceConnection
@@ -44,7 +45,7 @@ public class TestcontainersConfiguration {
 
     @Bean
     LocalStackContainer localStackContainer() {
-        return new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.4")).withServices("sns", "sqs");
+        return new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.4")).withServices("s3", "sns", "sqs");
     }
 
     @Bean
@@ -78,6 +79,23 @@ public class TestcontainersConfiguration {
                     MeetingMoved.TOPIC,
                     FolderDeleted.TOPIC));
             registry.add("nineouting.inbox.queue", () -> queueUrl);
+        };
+    }
+
+    /** LocalStack S3 접속 정보를 설정에 넣고 테스트용 버킷을 만든다 (양식 배경 이미지, REQ-157) */
+    @Bean
+    DynamicPropertyRegistrar storageProperties(LocalStackContainer localStack) {
+        return registry -> {
+            try {
+                localStack.execInContainer("awslocal", "s3", "mb", "s3://" + TEST_BUCKET);
+            } catch (Exception e) {
+                throw new IllegalStateException("테스트 버킷을 만들지 못했습니다", e);
+            }
+            registry.add("nineouting.minutes.storage.bucket", () -> TEST_BUCKET);
+            registry.add("nineouting.minutes.storage.endpoint", () -> localStack.getEndpoint().toString());
+            registry.add("nineouting.minutes.storage.region", localStack::getRegion);
+            registry.add("nineouting.minutes.storage.access-key", localStack::getAccessKey);
+            registry.add("nineouting.minutes.storage.secret-key", localStack::getSecretKey);
         };
     }
 

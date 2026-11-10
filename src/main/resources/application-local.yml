@@ -4,3 +4,9 @@ nineouting:
     endpoint: http://localhost:4566
     access-key: test
     secret-key: test
+  minutes:
+    storage:                       # docker-compose의 LocalStack (버킷은 init-s3.sh가 만든다)
+      bucket: nineouting-local
+      endpoint: http://localhost:4566
+      access-key: test
+      secret-key: test

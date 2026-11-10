@@ -3,6 +3,8 @@ package com.nineouting.backend.minutes.controller;
 import com.nineouting.backend.common.security.jwt.AuthenticatedUser;
 import com.nineouting.backend.common.security.web.CurrentUser;
 import com.nineouting.backend.common.web.response.ApiResponse;
+import com.nineouting.backend.minutes.dto.BackgroundUploadRequest;
+import com.nineouting.backend.minutes.dto.BackgroundUploadResponse;
 import com.nineouting.backend.minutes.dto.TemplateRequest;
 import com.nineouting.backend.minutes.dto.TemplateResponse;
 import com.nineouting.backend.minutes.service.TemplateService;
@@ -37,6 +39,13 @@ public class TemplateController {
     public ResponseEntity<ApiResponse<TemplateResponse>> create(@CurrentUser AuthenticatedUser user,
                                                                 @Valid @RequestBody TemplateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(templateService.create(user.userId(), request)));
+    }
+
+    /** REQ-157 양식 배경 이미지 업로드 주소 */
+    @PostMapping("/background-upload-url")
+    public ApiResponse<BackgroundUploadResponse> backgroundUploadUrl(@CurrentUser AuthenticatedUser user,
+                                                                    @Valid @RequestBody BackgroundUploadRequest request) {
+        return ApiResponse.ok(templateService.backgroundUploadUrl(user.userId(), request));
     }
 
     @PutMapping("/{templateId}")

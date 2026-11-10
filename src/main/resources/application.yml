@@ -30,6 +30,15 @@ nineouting:
     # 이 서비스 큐. 받는 이벤트는 SNS 구독이 정한다: meeting.finished, meeting.moved, workspace.folder-deleted
     queue: ${SQS_QUEUE_URL:http://localhost:4566/000000000000/nineouting-local-minutes-service.fifo}
   minutes:
+    storage:                               # 양식 배경 이미지 (S3, REQ-157). 파일은 template-backgrounds/ 아래에 둔다
+      bucket: ${STORAGE_BUCKET:nineouting-dev-files}
+      region: ${AWS_REGION:ap-northeast-2}
+      endpoint: ${STORAGE_ENDPOINT:}        # 비우면 AWS S3
+      presign-endpoint: ${STORAGE_PRESIGN_ENDPOINT:}  # 브라우저에 줄 주소만 다를 때 (로컬 통합 환경)
+      access-key: ${STORAGE_ACCESS_KEY:}    # 비우면 AWS 기본 자격 증명(Pod Identity 등)
+      secret-key: ${STORAGE_SECRET_KEY:}
+      upload-url-ttl: 5m
+      download-url-ttl: 1h
     # AI 회의록 초안 (REQ-101~103). ai-service 주소를 비우면 요청하지 않는다
     draft:
       ai-service-url: ${AI_SERVICE_URL:}
