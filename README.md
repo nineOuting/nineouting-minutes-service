@@ -37,7 +37,7 @@
 | GET | `/api/users/me/recent-minutes?size=10` | 홈: 최근 확정 회의록 |
 | GET · POST · PUT · DELETE | `/api/minutes-templates` | 회의록 양식 (개인 + 기본 양식) |
 
-PDF 다운로드(REQ-113)는 프론트에서 만든다.
+PDF 다운로드(REQ-137)는 프론트에서 만든다.
 
 ## 이벤트
 
