@@ -166,7 +166,8 @@ public class ArchiveService {
         }
         List<MinutesView> views = viewRepository.findByUserIdOrderByViewedAtDesc(userId, PageRequest.of(0, MAX_VIEWED_READ));
         Map<Long, Minutes> found = minutesRepository.findAllById(views.stream().map(MinutesView::getMinutesId).toList())
-                .stream().collect(Collectors.toMap(Minutes::getId, Function.identity()));
+                .stream().filter(minutes -> !minutes.isTrashed())
+                .collect(Collectors.toMap(Minutes::getId, Function.identity()));
         return views.stream()
                 .filter(view -> found.containsKey(view.getMinutesId()))
                 .filter(view -> folders.containsKey(found.get(view.getMinutesId()).getFolderId()))
@@ -182,7 +183,7 @@ public class ArchiveService {
     /** REQ-149~150. 내가 작성자인 작성 중 회의록, 회의 날짜가 오래된 순. 들어갈 수 없게 된 폴더의 회의록은 뺀다 */
     @Transactional(readOnly = true)
     public List<WritingMinutesResponse> writing(Long userId) {
-        List<Minutes> writing = minutesRepository.findByWriterUserIdAndStatusOrderByMeetingStartAtAscIdAsc(userId,
+        List<Minutes> writing = minutesRepository.findByWriterUserIdAndStatusAndTrashedAtIsNullOrderByMeetingStartAtAscIdAsc(userId,
                 MinutesStatus.WRITING);
         if (writing.isEmpty()) {
             return List.of();
@@ -215,7 +216,7 @@ public class ArchiveService {
         Map<Long, ReviewStatus> myStatus = reviewRepository.findByUserIdAndStatusIn(userId, WAITING_FOR_ME).stream()
                 .collect(Collectors.toMap(MinutesReview::getMinutesId, MinutesReview::getStatus));
         List<ReviewRequestItemResponse> items = minutesRepository.findAllById(myStatus.keySet()).stream()
-                .filter(minutes -> minutes.is(MinutesStatus.REVIEWING))
+                .filter(minutes -> minutes.is(MinutesStatus.REVIEWING) && !minutes.isTrashed())
                 .sorted(Comparator.comparing(Minutes::getMeetingStartAt).thenComparing(Minutes::getId))
                 .map(minutes -> new ReviewRequestItemResponse(minutes.getId(), minutes.getMeetingId(),
                         minutes.getWorkspaceId(), minutes.getFolderId(), minutes.getTitle(), minutes.getMeetingStartAt(),
@@ -231,7 +232,7 @@ public class ArchiveService {
         if (folders.isEmpty()) {
             return List.of();
         }
-        return minutesRepository.findByFolderIdInAndStatusOrderByConfirmedAtDescIdDesc(folders.keySet(),
+        return minutesRepository.findByFolderIdInAndStatusAndTrashedAtIsNullOrderByConfirmedAtDescIdDesc(folders.keySet(),
                         MinutesStatus.CONFIRMED, PageRequest.of(0, Math.clamp(size, 1, MAX_RECENT_SIZE))).stream()
                 .map(minutes -> {
                     AccessibleFolder folder = folders.get(minutes.getFolderId());

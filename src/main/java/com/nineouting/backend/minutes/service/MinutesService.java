@@ -84,6 +84,9 @@ public class MinutesService {
     public MinutesDetailResponse getByMeeting(Long meetingId, Long userId) {
         Minutes minutes = minutesRepository.findByMeetingId(meetingId)
                 .orElseThrow(() -> new BusinessException(MinutesErrorCode.MINUTES_NOT_READY));
+        if (minutes.isTrashed()) {
+            throw new BusinessException(CommonErrorCode.NOT_FOUND);
+        }
         access.requireViewable(minutes, userId);
         return detail(minutes, userId);
     }

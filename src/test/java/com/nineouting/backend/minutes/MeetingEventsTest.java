@@ -2,11 +2,15 @@ package com.nineouting.backend.minutes;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.nineouting.backend.common.event.EventEnvelope;
 import com.nineouting.backend.common.event.meeting.MeetingFinished;
 import com.nineouting.backend.common.event.meeting.MeetingMoved;
 import com.nineouting.backend.common.event.workspace.FolderDeleted;
+import com.nineouting.backend.minutes.event.MeetingTrashEvents.MeetingPurged;
+import com.nineouting.backend.minutes.event.MeetingTrashEvents.MeetingRestored;
+import com.nineouting.backend.minutes.event.MeetingTrashEvents.MeetingTrashed;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -48,6 +52,33 @@ class MeetingEventsTest extends ApiTestSupport {
 
         publish(FolderDeleted.TOPIC, FolderDeleted.TYPE, new FolderDeleted(workspaceId, List.of(to)));
         await(writer, meetingId, status -> status == 404);
+    }
+
+    @Test
+    void 회의가_쓰레기통에_들어가면_회의록을_숨기고_복구하면_보이고_영구_삭제하면_지운다() throws Exception {
+        Long workspaceId = newId();
+        Long writer = newId();
+        Long folderId = folder(workspaceId, "기획", writer);
+        Long meetingId = newId();
+        publish(MeetingFinished.TOPIC, MeetingFinished.TYPE, new MeetingFinished(meetingId, workspaceId, folderId,
+                "지울 회의", LocalDateTime.of(2026, 10, 20, 14, 0), "3층 회의실", writer, List.of(writer)));
+        await(writer, meetingId, status -> status == 200);
+        Long minutesId = id(call(writer, get("/api/meetings/" + meetingId + "/minutes"), null), "$.data.minutesId");
+
+        publish(MeetingMoved.TOPIC, MeetingTrashed.TYPE, new MeetingTrashed(meetingId, workspaceId, folderId));
+        await(writer, meetingId, status -> status == 404);
+        call(writer, get("/api/minutes/" + minutesId), null).andExpect(status().isNotFound());
+        call(writer, get("/api/users/me/writing-minutes"), null)
+                .andExpect(jsonPath("$.data[?(@.minutesId == " + minutesId + ")]").isEmpty());
+
+        publish(MeetingMoved.TOPIC, MeetingRestored.TYPE, new MeetingRestored(meetingId, workspaceId, folderId));
+        await(writer, meetingId, status -> status == 200);
+        call(writer, get("/api/users/me/writing-minutes"), null)
+                .andExpect(jsonPath("$.data[?(@.minutesId == " + minutesId + ")]").isNotEmpty());
+
+        publish(MeetingMoved.TOPIC, MeetingPurged.TYPE, new MeetingPurged(meetingId, workspaceId));
+        await(writer, meetingId, status -> status != 200);
+        call(writer, get("/api/minutes/" + minutesId), null).andExpect(status().isNotFound());
     }
 
     private void publish(String topic, String type, Object payload) throws Exception {

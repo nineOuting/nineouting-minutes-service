@@ -90,6 +90,10 @@ public class Minutes extends BaseTimeEntity {
     @Column(name = "draft_requested_at")
     private LocalDateTime draftRequestedAt;
 
+    /** REQ-166 회의가 쓰레기통에 있으면 회의록도 숨긴다. null이면 보인다 */
+    @Column(name = "trashed_at")
+    private LocalDateTime trashedAt;
+
     public Minutes(Long meetingId, Long workspaceId, Long folderId, String title, LocalDateTime meetingStartAt,
                    String location, Long writerUserId) {
         this.meetingId = meetingId;
@@ -129,6 +133,18 @@ public class Minutes extends BaseTimeEntity {
         this.status = MinutesStatus.CONFIRMED;
         this.confirmedAt = now;
         this.confirmedByUserId = confirmedByUserId;
+    }
+
+    public boolean isTrashed() {
+        return trashedAt != null;
+    }
+
+    public void trash(LocalDateTime now) {
+        this.trashedAt = now;
+    }
+
+    public void restore() {
+        this.trashedAt = null;
     }
 
     public void moveTo(Long folderId) {

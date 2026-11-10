@@ -57,7 +57,8 @@ public class MinutesSearchRepository {
     }
 
     private static String where(Filter filter, Map<String, Object> params) {
-        StringBuilder sql = new StringBuilder("where m.folder_id in (:folderIds)");
+        // 회의가 쓰레기통에 있는 회의록은 뺀다 (REQ-166)
+        StringBuilder sql = new StringBuilder("where m.folder_id in (:folderIds) and m.trashed_at is null");
         params.put("folderIds", filter.folderIds());
         if (filter.query() != null && !filter.query().isBlank()) {
             sql.append(" and m.search_text ilike :like");

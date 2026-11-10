@@ -29,14 +29,19 @@ public interface MinutesRepository extends JpaRepository<Minutes, Long> {
     List<Minutes> lockWaitingForSource(int limit);
 
     /** 최근 확정 (REQ-026, 레거시) */
-    List<Minutes> findByFolderIdInAndStatusOrderByConfirmedAtDescIdDesc(Collection<Long> folderIds, MinutesStatus status,
-                                                                       Pageable pageable);
+    List<Minutes> findByFolderIdInAndStatusAndTrashedAtIsNullOrderByConfirmedAtDescIdDesc(Collection<Long> folderIds,
+                                                                                         MinutesStatus status,
+                                                                                         Pageable pageable);
 
     /** 홈의 작성 중인 회의록 (REQ-149~150) */
-    List<Minutes> findByWriterUserIdAndStatusOrderByMeetingStartAtAscIdAsc(Long writerUserId, MinutesStatus status);
+    List<Minutes> findByWriterUserIdAndStatusAndTrashedAtIsNullOrderByMeetingStartAtAscIdAsc(Long writerUserId,
+                                                                                            MinutesStatus status);
 
     /** 아카이브 장소 필터의 선택지 (REQ-055) */
-    @Query("select distinct m.location from Minutes m where m.folderId in :folderIds and m.location <> '' order by m.location")
+    @Query("""
+            select distinct m.location from Minutes m
+            where m.folderId in :folderIds and m.location <> '' and m.trashedAt is null
+            order by m.location""")
     List<String> findLocationsByFolderIdIn(Collection<Long> folderIds);
 
     @Query("select m.id from Minutes m where m.folderId in :folderIds")
