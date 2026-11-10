@@ -25,13 +25,16 @@ public class MinutesAccess {
     private final WorkspaceClient workspaceClient;
 
     public Minutes require(Long minutesId) {
+        // 회의가 쓰레기통에 있으면 없는 회의록처럼 본다 (REQ-166)
         return minutesRepository.findById(minutesId)
+                .filter(minutes -> !minutes.isTrashed())
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
     }
 
     /** 내용 저장·검토·확정처럼 상태를 바꿀 때는 잠가서 가져온다 */
     public Minutes requireForUpdate(Long minutesId) {
         return minutesRepository.findByIdForUpdate(minutesId)
+                .filter(minutes -> !minutes.isTrashed())
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
     }
 
