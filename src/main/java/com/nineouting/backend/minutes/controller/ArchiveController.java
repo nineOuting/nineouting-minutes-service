@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 아카이브(REQ-053~055, 056(레거시), 146)와 홈(REQ-021~023 레거시, 026~027, 142) */
+/** 아카이브(REQ-053~055, 056(레거시), 159)와 홈(REQ-021~023, 026~027 레거시, 149~150) */
 @RestController
 @RequiredArgsConstructor
 public class ArchiveController {
