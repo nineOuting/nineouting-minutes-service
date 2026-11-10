@@ -131,7 +131,7 @@ public abstract class ApiTestSupport {
     protected Long finishMeetingAt(Long meetingId, Long folderId, String title, LocalDateTime startAt, String location,
                                    Long writerId, Long... attendees) throws Exception {
         minutesService.createFromMeeting(new MeetingFinished(meetingId, workspaceOf(folderId), folderId, title, startAt,
-                location, writerId, List.of(attendees)));
+                location, writerId, List.of(attendees), null));
         return id(call(writerId, get("/api/meetings/" + meetingId + "/minutes"), null), "$.data.minutesId");
     }
 
@@ -171,7 +171,7 @@ public abstract class ApiTestSupport {
         return ((Number) JsonPath.read(result.andReturn().getResponse().getContentAsString(), path)).longValue();
     }
 
-    private static Long workspaceOf(Long folderId) {
+    protected static Long workspaceOf(Long folderId) {
         return requireFolder(folderId).workspaceId();
     }
 

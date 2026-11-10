@@ -40,7 +40,7 @@ class MeetingEventsTest extends ApiTestSupport {
         Long meetingId = newId();
 
         publish(MeetingFinished.TOPIC, MeetingFinished.TYPE, new MeetingFinished(meetingId, workspaceId, from, "주간 회의",
-                LocalDateTime.of(2026, 10, 20, 14, 0), "3층 회의실", writer, List.of(writer)));
+                LocalDateTime.of(2026, 10, 20, 14, 0), "3층 회의실", writer, List.of(writer), null));
         await(writer, meetingId, status -> status == 200);
         call(writer, get("/api/meetings/" + meetingId + "/minutes"), null)
                 .andExpect(jsonPath("$.data.title").value("주간 회의"))
@@ -61,7 +61,7 @@ class MeetingEventsTest extends ApiTestSupport {
         Long folderId = folder(workspaceId, "기획", writer);
         Long meetingId = newId();
         publish(MeetingFinished.TOPIC, MeetingFinished.TYPE, new MeetingFinished(meetingId, workspaceId, folderId,
-                "지울 회의", LocalDateTime.of(2026, 10, 20, 14, 0), "3층 회의실", writer, List.of(writer)));
+                "지울 회의", LocalDateTime.of(2026, 10, 20, 14, 0), "3층 회의실", writer, List.of(writer), null));
         await(writer, meetingId, status -> status == 200);
         Long minutesId = id(call(writer, get("/api/meetings/" + meetingId + "/minutes"), null), "$.data.minutesId");
 

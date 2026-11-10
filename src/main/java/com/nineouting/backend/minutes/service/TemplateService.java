@@ -3,6 +3,7 @@ package com.nineouting.backend.minutes.service;
 import com.nineouting.backend.common.web.error.BusinessException;
 import com.nineouting.backend.common.web.error.CommonErrorCode;
 import com.nineouting.backend.minutes.domain.Template;
+import com.nineouting.backend.minutes.domain.TemplateFavorite;
 import com.nineouting.backend.minutes.domain.TemplateItem;
 import com.nineouting.backend.minutes.dto.BackgroundUploadRequest;
 import com.nineouting.backend.minutes.dto.BackgroundUploadResponse;
@@ -10,8 +11,11 @@ import com.nineouting.backend.minutes.dto.TemplateItemRequest;
 import com.nineouting.backend.minutes.dto.TemplateRequest;
 import com.nineouting.backend.minutes.dto.TemplateResponse;
 import com.nineouting.backend.minutes.error.MinutesErrorCode;
+import com.nineouting.backend.minutes.repository.TemplateFavoriteRepository;
 import com.nineouting.backend.minutes.repository.TemplateItemRepository;
 import com.nineouting.backend.minutes.repository.TemplateRepository;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +46,8 @@ public class TemplateService {
     private final BackgroundStorage backgroundStorage;
     private final TemplateItemRepository itemRepository;
     private final TemplateSettings settings;
+    private final TemplateFavoriteRepository favoriteRepository;
+    private final Clock clock;
 
     /** 기본 양식이 먼저, 그다음 내 양식 */
     @Transactional(readOnly = true)
@@ -50,16 +56,34 @@ public class TemplateService {
         Map<Long, List<TemplateItem>> items = itemRepository.findByTemplateIdInOrderByPosition(
                         templates.stream().map(Template::getId).toList()).stream()
                 .collect(Collectors.groupingBy(TemplateItem::getTemplateId));
+        Set<Long> favorites = favoriteRepository.findByUserId(userId).stream()
+                .map(TemplateFavorite::getTemplateId)
+                .collect(Collectors.toSet());
         return templates.stream()
-                .map(template -> response(template, items.getOrDefault(template.getId(), List.of())))
+                .map(template -> response(template, items.getOrDefault(template.getId(), List.of()),
+                        favorites.contains(template.getId())))
                 .toList();
+    }
+
+    /** REQ-123 양식 즐겨찾기 등록·해제. 기본 양식도 된다. 여러 번 해도 결과가 같다 */
+    @Transactional
+    public void favorite(Long templateId, Long userId, boolean favorite) {
+        templateRepository.findById(templateId)
+                .filter(found -> found.isUsableBy(userId))
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+        boolean exists = favoriteRepository.existsByTemplateIdAndUserId(templateId, userId);
+        if (favorite && !exists) {
+            favoriteRepository.save(new TemplateFavorite(templateId, userId, LocalDateTime.now(clock)));
+        } else if (!favorite && exists) {
+            favoriteRepository.deleteByTemplateIdAndUserId(templateId, userId);
+        }
     }
 
     @Transactional
     public TemplateResponse create(Long userId, TemplateRequest request) {
         Template template = templateRepository.save(new Template(userId, request.name(), request.description(),
                 settings.write(layoutToSave(request.layout()))));
-        return response(template, saveItems(template.getId(), request.items()));
+        return response(template, saveItems(template.getId(), request.items()), false);
     }
 
     @Transactional
@@ -67,7 +91,8 @@ public class TemplateService {
         Template template = requireOwn(templateId, userId);
         template.change(request.name(), request.description(), settings.write(layoutToSave(request.layout())));
         itemRepository.deleteByTemplateId(templateId);
-        return response(template, saveItems(templateId, request.items()));
+        return response(template, saveItems(templateId, request.items()),
+                favoriteRepository.existsByTemplateIdAndUserId(templateId, userId));
     }
 
     @Transactional
@@ -140,12 +165,12 @@ public class TemplateService {
         return saved;
     }
 
-    private TemplateResponse response(Template template, List<TemplateItem> items) {
+    private TemplateResponse response(Template template, List<TemplateItem> items, boolean favorite) {
         return new TemplateResponse(template.getId(), template.getName(), template.getDescription(), template.isDefault(),
                 items.stream()
                         .map(item -> new TemplateResponse.TemplateItemResponse(item.getTitle(), item.getDescription(),
                                 settings.read(item.getSettings())))
                         .toList(),
-                layoutToShow(template.getLayout()));
+                layoutToShow(template.getLayout()), favorite);
     }
 }
