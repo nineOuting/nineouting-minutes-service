@@ -66,7 +66,11 @@ public class MinutesService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
-    /** 회의 마무리(REQ-098)를 받아 작성 중인 회의록을 만든다. 같은 회의는 한 번만 만든다. */
+    /**
+     * 회의 마무리(REQ-098)를 받아 작성 중인 회의록을 만든다. 같은 회의는 한 번만 만든다.
+     * 대기 화면에서 고른 양식(REQ-123)이 있으면 그 양식으로 만든다. 작성자가 쓸 수 없는 양식(다른 사람의 개인 양식,
+     * 그사이 지운 양식)이면 양식 없이 만들고 작성자가 작성 화면에서 고른다.
+     */
     @Transactional
     public void createFromMeeting(MeetingFinished event) {
         if (minutesRepository.existsByMeetingId(event.meetingId())) {
@@ -77,6 +81,11 @@ public class MinutesService {
         Set<Long> attendees = new LinkedHashSet<>(event.attendeeUserIds());
         attendees.add(event.writerUserId());
         attendees.forEach(userId -> attendeeRepository.save(new MinutesAttendee(minutes.getId(), userId)));
+        if (event.templateId() != null) {
+            templateRepository.findById(event.templateId())
+                    .filter(template -> template.isUsableBy(event.writerUserId()))
+                    .ifPresent(template -> applyTemplate(minutes, template, event.writerUserId()));
+        }
     }
 
     /** 회의에서 회의록으로 이동 (REQ-020). 회의 마무리 이벤트를 아직 처리하지 않았으면 "준비 중" */
@@ -112,7 +121,13 @@ public class MinutesService {
         Template template = templateRepository.findById(templateId)
                 .filter(found -> found.isUsableBy(userId))
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+        applyTemplate(minutes, template, userId);
+        return detail(minutes, userId);
+    }
 
+    /** 칸을 양식 항목대로 다시 만든다. 제목이 같은 칸은 쓰던 내용을 옮긴다. 처음 고르면 AI 초안을 요청한다 (REQ-101) */
+    private void applyTemplate(Minutes minutes, Template template, Long userId) {
+        Long minutesId = minutes.getId();
         List<MinutesSection> previous = sectionRepository.findByMinutesIdOrderByPosition(minutesId);
         Map<String, String> contents = new HashMap<>();
         previous.forEach(section -> contents.putIfAbsent(section.getTitle(), section.getContent()));
@@ -128,7 +143,6 @@ public class MinutesService {
             // 양식을 처음 고르면 저장이 끝난 뒤 AI 초안을 요청한다 (REQ-101, DraftService)
             events.publishEvent(new TemplateSelected(minutesId));
         }
-        return detail(minutes, userId);
     }
 
     /**

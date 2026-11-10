@@ -59,4 +59,18 @@ public class TemplateController {
         templateService.delete(templateId, user.userId());
         return ApiResponse.ok();
     }
+
+    /** REQ-123 즐겨찾기 등록 */
+    @PutMapping("/{templateId}/favorite")
+    public ApiResponse<Void> addFavorite(@CurrentUser AuthenticatedUser user, @PathVariable Long templateId) {
+        templateService.favorite(templateId, user.userId(), true);
+        return ApiResponse.ok();
+    }
+
+    /** REQ-123 즐겨찾기 해제 */
+    @DeleteMapping("/{templateId}/favorite")
+    public ApiResponse<Void> removeFavorite(@CurrentUser AuthenticatedUser user, @PathVariable Long templateId) {
+        templateService.favorite(templateId, user.userId(), false);
+        return ApiResponse.ok();
+    }
 }

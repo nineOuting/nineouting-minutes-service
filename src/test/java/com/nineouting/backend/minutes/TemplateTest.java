@@ -8,7 +8,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.nineouting.backend.common.event.meeting.MeetingFinished;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** 회의록 양식 관리 (REQ-119~121) */
@@ -76,6 +78,58 @@ class TemplateTest extends ApiTestSupport {
 
         call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
                 .andExpect(jsonPath("$.data.sections[*].title", contains("요약", "할 일")));
+    }
+
+    @Test
+    void 양식을_즐겨찾기하면_내_목록에만_표시된다() throws Exception {
+        Long me = newId();
+        Long other = newId();
+        Long mine = id(call(me, post("/api/minutes-templates"), "{\"name\":\"짧은 양식\",\"items\":[{\"title\":\"요약\"}]}"),
+                "$.data.templateId");
+
+        // REQ-123 기본 양식도, 내 양식도 즐겨찾기한다. 여러 번 해도 같다
+        call(me, put("/api/minutes-templates/" + DEFAULT_TEMPLATE_ID + "/favorite"), null).andExpect(status().isOk());
+        call(me, put("/api/minutes-templates/" + mine + "/favorite"), null).andExpect(status().isOk());
+        call(me, put("/api/minutes-templates/" + mine + "/favorite"), null).andExpect(status().isOk());
+        call(me, get("/api/minutes-templates"), null)
+                .andExpect(jsonPath("$.data[*].favorite", contains(true, true)));
+        call(other, get("/api/minutes-templates"), null).andExpect(jsonPath("$.data[0].favorite").value(false));
+        // 남의 개인 양식은 없는 것처럼
+        call(other, put("/api/minutes-templates/" + mine + "/favorite"), null).andExpect(status().isNotFound());
+
+        call(me, delete("/api/minutes-templates/" + DEFAULT_TEMPLATE_ID + "/favorite"), null).andExpect(status().isOk());
+        call(me, get("/api/minutes-templates"), null)
+                .andExpect(jsonPath("$.data[*].favorite", contains(false, true)));
+        // 즐겨찾기한 양식도 지울 수 있다
+        call(me, delete("/api/minutes-templates/" + mine), null).andExpect(status().isOk());
+    }
+
+    @Test
+    void 대기_화면에서_고른_양식으로_회의록을_만든다() throws Exception {
+        Long writer = newId();
+        Long attendee = newId();
+        Long folderId = folder(newId(), "기획", writer, attendee);
+        Long mine = id(call(writer, post("/api/minutes-templates"), "{\"name\":\"짧은 양식\",\"items\":[{\"title\":\"요약\"},{\"title\":\"할 일\"}]}"),
+                "$.data.templateId");
+        Long othersTemplate = id(call(attendee, post("/api/minutes-templates"), "{\"name\":\"남의 양식\",\"items\":[{\"title\":\"x\"}]}"),
+                "$.data.templateId");
+        LocalDateTime startAt = LocalDateTime.of(2026, 10, 20, 10, 0);
+
+        // REQ-123 작성자가 쓸 수 있는 양식이면 그 양식의 칸으로 만든다
+        Long meetingId = newId();
+        minutesService.createFromMeeting(new MeetingFinished(meetingId, workspaceOf(folderId), folderId, "회의", startAt, "",
+                writer, List.of(writer, attendee), mine));
+        call(writer, get("/api/meetings/" + meetingId + "/minutes"), null)
+                .andExpect(jsonPath("$.data.templateId").value(mine))
+                .andExpect(jsonPath("$.data.sections[*].title", contains("요약", "할 일")));
+
+        // 다른 참석자의 개인 양식은 작성자가 쓸 수 없어 양식 없이 만든다 (작성 화면에서 고른다)
+        Long another = newId();
+        minutesService.createFromMeeting(new MeetingFinished(another, workspaceOf(folderId), folderId, "회의", startAt, "",
+                writer, List.of(writer, attendee), othersTemplate));
+        call(writer, get("/api/meetings/" + another + "/minutes"), null)
+                .andExpect(jsonPath("$.data.templateId").isEmpty())
+                .andExpect(jsonPath("$.data.sections.length()").value(0));
     }
 
     @Test
