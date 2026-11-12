@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -33,6 +34,8 @@ class MinutesRagTest extends ApiTestSupport {
 
     private static final HttpServer SERVER;
     private static final List<String> REQUESTS = new CopyOnWriteArrayList<>();
+    /** true면 RAG가 꺼진 ai-service처럼 404로 답한다 */
+    private static final AtomicBoolean RAG_OFF = new AtomicBoolean(false);
     private static final LocalDateTime START = LocalDateTime.of(2026, 11, 12, 10, 0);
 
     static {
@@ -104,6 +107,30 @@ class MinutesRagTest extends ApiTestSupport {
         assertThat(JsonPath.<String>read(second, "$.minutes.sections[0].content")).isEqualTo("고친 논의");
         callback(minutesId, firstVersion, "ready");
         assertThat(minutesRepository.findById(minutesId).orElseThrow().getRagStatus()).isEqualTo(RagStatus.ACCEPTED);
+    }
+
+    @Test
+    void ai_service에_RAG가_꺼져_있으면_실패로_굳히지_않고_켜진_뒤_보낸다() throws Exception {
+        Long writer = newId();
+        Long folderId = folder(newId(), "기획", writer);
+        RAG_OFF.set(true);
+        try {
+            Long minutesId = confirmed(folderId, writer, START);
+            for (int i = 0; i < 6; i++) {
+                transactionTemplate.executeWithoutResult(status -> minutesRepository.findById(minutesId).orElseThrow()
+                        .ragRetryLater("unavailable", LocalDateTime.now().minusSeconds(1)));
+                minutesRagSync.run();
+            }
+            assertThat(minutesRepository.findById(minutesId).orElseThrow().getRagStatus()).isEqualTo(RagStatus.PENDING);
+
+            RAG_OFF.set(false);
+            transactionTemplate.executeWithoutResult(status -> minutesRepository.findById(minutesId).orElseThrow()
+                    .ragRetryLater("unavailable", LocalDateTime.now().minusSeconds(1)));
+            minutesRagSync.run();
+            assertThat(minutesRepository.findById(minutesId).orElseThrow().getRagStatus()).isEqualTo(RagStatus.ACCEPTED);
+        } finally {
+            RAG_OFF.set(false);
+        }
     }
 
     @Test
@@ -179,7 +206,9 @@ class MinutesRagTest extends ApiTestSupport {
         String path = exchange.getRequestURI().getPath();
         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         String method = exchange.getRequestMethod();
-        if (path.equals("/internal/rag/documents")) {
+        if (RAG_OFF.get() && path.startsWith("/internal/rag/")) {
+            respond(exchange, 404, "{\"detail\":\"Not Found\"}");
+        } else if (path.equals("/internal/rag/documents")) {
             REQUESTS.add(method + " " + path + "\n" + body);
             respond(exchange, 202, "{\"status\":\"accepted\"}");
         } else if (path.startsWith("/internal/rag/documents/")) {

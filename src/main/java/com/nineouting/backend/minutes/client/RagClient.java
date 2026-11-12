@@ -12,7 +12,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * ai-service RAG 호출: 회의록 넣기, 상태 조회, 지우기 (RAG 명세 2026-11-12, minutes-draft-contract.md 4장).
- * 서버 간 인증은 지금 없다 (내부망만). 400, 409는 Rejected(다시 보내도 같음), 408, 429, 5xx, 연결 실패는 Unavailable(다시 보냄).
+ * 서버 간 인증은 지금 없다 (내부망만). 400, 409는 Rejected(다시 보내도 같음), 그 밖(404, 408, 429, 5xx, 연결 실패)은
+ * Unavailable(다시 보냄). 404는 ai-service에 RAG가 꺼져 있을 때다 (RAG_DATABASE_URL 없음). 켜지면 다시 보낸다.
  */
 public class RagClient {
 
@@ -45,7 +46,7 @@ public class RagClient {
                     .header(REQUEST_ID_HEADER, UUID.randomUUID().toString())
                     .retrieve()
                     .body(JsonNode.class)));
-        } catch (Rejected e) {
+        } catch (Unavailable e) {
             if (e.getCause() instanceof HttpClientErrorException.NotFound) {
                 return Optional.empty();
             }
@@ -68,10 +69,10 @@ public class RagClient {
         } catch (HttpClientErrorException e) {
             int status = e.getStatusCode().value();
             String message = "ai-service RAG가 거절했습니다: " + e.getStatusCode() + " " + errorOf(e);
-            if (status == HttpStatus.REQUEST_TIMEOUT.value() || status == HttpStatus.TOO_MANY_REQUESTS.value()) {
-                throw new Unavailable(message, e);
+            if (status == HttpStatus.BAD_REQUEST.value() || status == HttpStatus.CONFLICT.value()) {
+                throw new Rejected(message, e);
             }
-            throw new Rejected(message, e);
+            throw new Unavailable(message, e);
         } catch (RestClientException e) {
             throw new Unavailable("ai-service RAG 호출 실패: " + e.getMessage(), e);
         }

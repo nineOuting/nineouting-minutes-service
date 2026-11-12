@@ -38,6 +38,7 @@ import tools.jackson.databind.node.ObjectNode;
  * 작성 완료 때 처음, 그 뒤 저장할 때마다 다시 넣는다 (Minutes.ragPending). 작성 중인 회의록은 넣지 않는다.
  * 보관함 표 없이 회의록 행의 rag_status로 보내고 다시 보낸다. 쓰레기통의 회의록은 질문할 때 목록에서 빠지므로 지우지 않고,
  * 영구 삭제할 때 지운다. 표 칸은 마크다운 표로 바꿔 보낸다.
+ * ai-service가 안 되거나 RAG가 꺼져 있으면(404) 실패로 굳히지 않고 간격을 늘려(최대 약 30분) 계속 다시 보낸다.
  */
 @Slf4j
 @Component
@@ -143,8 +144,8 @@ public class MinutesRagSync {
             minutes.ragFailed(REJECTED);
             log.warn("ai-service가 회의록 넣기를 거절했습니다 (minutesId={}): {}", minutes.getId(), e.getMessage());
         } catch (RagClient.Unavailable e) {
-            minutes.ragRetry(UNAVAILABLE, now.plus(backoff(minutes)), properties.maxAttempts());
-            log.warn("회의록을 검색용 저장소에 보내지 못해 다시 보냅니다 (minutesId={}, {}회째): {}",
+            minutes.ragRetryLater(UNAVAILABLE, now.plus(backoff(minutes)));
+            log.warn("회의록을 검색용 저장소에 보내지 못해 나중에 다시 보냅니다 (minutesId={}, {}회째): {}",
                     minutes.getId(), minutes.getRagAttempts(), e.getMessage());
         }
         return true;
