@@ -25,6 +25,7 @@ public class MinutesPurger {
     private final MinutesCommentRepository commentRepository;
     private final MinutesMarkRepository markRepository;
     private final MinutesViewRepository viewRepository;
+    private final MinutesRagSync minutesRagSync;
 
     public void purge(Collection<Long> minutesIds) {
         if (minutesIds.isEmpty()) {
@@ -38,5 +39,7 @@ public class MinutesPurger {
         markRepository.deleteByMinutesIdIn(minutesIds);
         viewRepository.deleteByMinutesIdIn(minutesIds);
         minutesRepository.deleteAllByIdIn(minutesIds);
+        // REQ-185 챗봇 검색용 저장소에서도 지운다 (실패해도 기록만)
+        minutesRagSync.deleteQuietly(minutesIds);
     }
 }

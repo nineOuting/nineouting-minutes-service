@@ -70,6 +70,28 @@ public class Minutes extends BaseTimeEntity {
     @Column(name = "confirmed_by_user_id")
     private Long confirmedByUserId;
 
+    /** REQ-185 챗봇 검색용 저장소에 넣은 상태. 작성 중이면 null (docs/services/rag-chatbot.md 3장) */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rag_status", length = 20)
+    private RagStatus ragStatus;
+
+    /** 마지막으로 보낸 contentVersion */
+    @Column(name = "rag_version")
+    private Integer ragVersion;
+
+    @Column(name = "rag_error_code", length = 40)
+    private String ragErrorCode;
+
+    @Column(name = "rag_attempts", nullable = false)
+    private int ragAttempts;
+
+    /** 다음에 보낼 시각. null이면 바로 */
+    @Column(name = "rag_next_attempt_at")
+    private LocalDateTime ragNextAttemptAt;
+
+    @Column(name = "rag_sent_at")
+    private LocalDateTime ragSentAt;
+
     /** 검색용: 회의명 + 모든 칸 제목·내용 (pg_trgm 인덱스) */
     @Column(name = "search_text", nullable = false, columnDefinition = "TEXT")
     private String searchText;
@@ -129,6 +151,9 @@ public class Minutes extends BaseTimeEntity {
             this.templateId = templateId;
         }
         this.searchText = searchText;
+        if (status == MinutesStatus.CONFIRMED) {
+            ragPending();
+        }
         return ++contentVersion;
     }
 
@@ -141,6 +166,45 @@ public class Minutes extends BaseTimeEntity {
         this.status = MinutesStatus.CONFIRMED;
         this.confirmedAt = now;
         this.confirmedByUserId = confirmedByUserId;
+        ragPending();
+    }
+
+    // ---- 챗봇 검색용 저장소 (REQ-185) ----
+
+    /** 작성 완료된 내용이 바뀌었다. 처음부터 다시 보낸다 */
+    public void ragPending() {
+        this.ragStatus = RagStatus.PENDING;
+        this.ragErrorCode = null;
+        this.ragAttempts = 0;
+        this.ragNextAttemptAt = null;
+    }
+
+    public void ragAccepted(int version, LocalDateTime now) {
+        this.ragStatus = RagStatus.ACCEPTED;
+        this.ragVersion = version;
+        this.ragSentAt = now;
+    }
+
+    public void ragReady() {
+        this.ragStatus = RagStatus.READY;
+        this.ragErrorCode = null;
+    }
+
+    public void ragFailed(String errorCode) {
+        this.ragStatus = RagStatus.FAILED;
+        this.ragErrorCode = errorCode;
+    }
+
+    /** 다시 보낼 일. 횟수를 넘으면 실패로 둔다 */
+    public void ragRetry(String errorCode, LocalDateTime nextAttemptAt, int maxAttempts) {
+        this.ragAttempts++;
+        if (ragAttempts >= maxAttempts) {
+            ragFailed(errorCode);
+            return;
+        }
+        this.ragStatus = RagStatus.PENDING;
+        this.ragErrorCode = errorCode;
+        this.ragNextAttemptAt = nextAttemptAt;
     }
 
     public boolean isTrashed() {
