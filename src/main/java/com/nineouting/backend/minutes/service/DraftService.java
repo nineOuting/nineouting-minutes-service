@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -92,7 +93,24 @@ public class DraftService {
         sendOrWait(minutes);
     }
 
-    /** 양식을 처음 고르면 저장이 끝난 뒤 자동으로 요청한다. 요약이 없으면 기다리고, 그 밖의 실패는 FAILED로 남긴다 */
+    /**
+     * 양식을 처음 고르면 같은 저장 안에서 "기다리는 중"(WAITING_SOURCE)으로 둔다. 실제 요청은 저장이 끝난 뒤라,
+     * 그 사이에 화면이 회의록을 받으면 상태가 비어 있어 초안을 기다리지 않던 문제를 막는다
+     */
+    @EventListener
+    public void markFirstDraft(MinutesService.TemplateSelected event) {
+        if (!properties.enabled()) {
+            return;
+        }
+        minutesRepository.findById(event.minutesId())
+                .filter(minutes -> minutes.getDraftStatus() == null && minutes.is(MinutesStatus.WRITING))
+                .ifPresent(minutes -> minutes.draftWaitingForSource(LocalDateTime.now(clock)));
+    }
+
+    /**
+     * 양식을 처음 고르면 저장이 끝난 뒤 자동으로 요청한다. 요약이 없으면 기다리고, 그 밖의 실패는 FAILED로 남긴다.
+     * 그사이 기다리는 초안 확인(requestWaitingDrafts)이 먼저 보냈으면 REQUESTED라 다시 보내지 않는다
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onTemplateSelected(MinutesService.TemplateSelected event) {
@@ -100,7 +118,7 @@ public class DraftService {
             return;
         }
         Minutes minutes = access.requireForUpdate(event.minutesId());
-        if (minutes.getDraftStatus() != null || !minutes.is(MinutesStatus.WRITING)) {
+        if (minutes.getDraftStatus() != DraftStatus.WAITING_SOURCE || !minutes.is(MinutesStatus.WRITING)) {
             return;
         }
         try {
