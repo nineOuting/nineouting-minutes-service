@@ -32,6 +32,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -125,10 +126,14 @@ public class MinutesService {
         return detail(minutes, userId);
     }
 
-    /** 칸을 양식 항목대로 다시 만든다. 제목이 같은 칸은 쓰던 내용을 옮긴다. 처음 고르면 AI 초안을 요청한다 (REQ-101) */
+    /**
+     * 칸을 양식 항목대로 다시 만든다. 제목이 같은 칸은 쓰던 내용을 옮긴다. 처음 고르면 AI 초안을 요청한다 (REQ-101).
+     * 양식을 바꾸면 바꾸기 전 칸을 넘겨 AI 다시 배치를 요청한다 (DraftService, ai-service 명세 8장)
+     */
     private void applyTemplate(Minutes minutes, Template template, Long userId) {
         Long minutesId = minutes.getId();
         List<MinutesSection> previous = sectionRepository.findByMinutesIdOrderByPosition(minutesId);
+        List<DraftLines.Section> before = minutes.getTemplateId() == null ? List.of() : snapshot(minutes.getTemplateId(), previous);
         Map<String, String> contents = new HashMap<>();
         previous.forEach(section -> contents.putIfAbsent(section.getTitle(), section.getContent()));
         sectionRepository.deleteAll(previous);
@@ -142,7 +147,22 @@ public class MinutesService {
         if (firstTemplate) {
             // 양식을 처음 고르면 저장이 끝난 뒤 AI 초안을 요청한다 (REQ-101, DraftService)
             events.publishEvent(new TemplateSelected(minutesId));
+        } else {
+            events.publishEvent(new TemplateChanged(minutesId, before));
         }
+    }
+
+    /** 바꾸기 전 칸의 글과, 표 칸인지 (바꾸기 전 양식의 기록 방식) */
+    private List<DraftLines.Section> snapshot(Long templateId, List<MinutesSection> sections) {
+        Set<String> tables = new HashSet<>();
+        for (TemplateItem item : templateItemRepository.findByTemplateIdOrderByPosition(templateId)) {
+            if ("TABLE".equals(jsonMapper.readTree(item.getSettings()).path("recordType").asString(""))) {
+                tables.add(item.getTitle());
+            }
+        }
+        return sections.stream()
+                .map(section -> new DraftLines.Section(section.getTitle(), section.getContent(), tables.contains(section.getTitle())))
+                .toList();
     }
 
     /**
@@ -218,6 +238,10 @@ public class MinutesService {
 
     /** 회의록의 양식을 처음 골랐다 */
     public record TemplateSelected(Long minutesId) {
+    }
+
+    /** 회의록의 양식을 바꿨다. before: 바꾸기 전 칸 */
+    public record TemplateChanged(Long minutesId, List<DraftLines.Section> before) {
     }
 
     /** REQ-111. 확정된 회의록을 고치면 참석자에게 알린다 (notification이 고친 사람은 뺀다) */

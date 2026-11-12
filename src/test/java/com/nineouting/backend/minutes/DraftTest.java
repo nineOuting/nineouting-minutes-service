@@ -30,6 +30,9 @@ class DraftTest extends ApiTestSupport {
     private static final HttpServer SERVER;
     private static final List<String> DRAFT_REQUESTS = new CopyOnWriteArrayList<>();
     private static final AtomicBoolean SOURCE_READY = new AtomicBoolean(true);
+    /** false면 ai-service가 초안 기능을 켜지 않은 것처럼 404로 답한다 */
+    private static final AtomicBoolean DRAFT_ENABLED = new AtomicBoolean(true);
+    private static final List<String> REQUEST_ID_HEADERS = new CopyOnWriteArrayList<>();
 
     static {
         try {
@@ -58,6 +61,7 @@ class DraftTest extends ApiTestSupport {
     @BeforeEach
     void setUp() throws Exception {
         SOURCE_READY.set(true);
+        DRAFT_ENABLED.set(true);
         writer = newId();
         Long attendee = newId();
         Long folderId = folder(newId(), "기획", writer, attendee);
@@ -171,6 +175,140 @@ class DraftTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data.draftStatus").value("WAITING_SOURCE"));
     }
 
+    @Test
+    void 빈_표_칸도_AI가_채우게_요청하고_결과의_마크다운_표를_저장_형식으로_바꾼다() throws Exception {
+        String body = """
+                {"name":"표 양식","items":[{"title":"할 일","description":"담당과 기한","settings":{"recordType":"TABLE","table":{"cols":3}}},
+                 {"title":"메모","settings":{"recordType":"FREE"}}]}""";
+        Long templateId = id(call(writer, post("/api/minutes-templates"), body), "$.data.templateId");
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
+                .andExpect(status().isOk());
+
+        String request = awaitDraftRequest();
+        assertThat(JsonPath.<List<String>>read(request, "$.template.fields[*].type")).containsExactly("table", "text");
+        assertThat(JsonPath.<List<Boolean>>read(request, "$.template.fields[*].aiFill")).containsExactly(true, true);
+        assertThat(JsonPath.<Integer>read(request, "$.template.fields[0].columns")).isEqualTo(3);
+        String requestId = JsonPath.read(request, "$.requestId");
+        assertThat(REQUEST_ID_HEADERS).contains(requestId);
+
+        callback("""
+                {"requestId":"%s","status":"SUCCEEDED","header":null,"footer":null,"unplaced":[],"unplacedLines":[],
+                 "sections":[{"title":"할 일","type":"table","aiFilled":true,"columns":["할 일","담당","기한"],
+                   "content":"| 할 일 | 담당 | 기한 |\\n|---|---|---|\\n| QA 일정표 공유 | 김철수 | 수요일까지 |","evidence":[]},
+                  {"title":"메모","type":"text","aiFilled":true,"content":"해당 내용 없음","evidence":[]}]}"""
+                .formatted(requestId));
+
+        call(writer, get("/api/minutes/" + minutesId), null)
+                .andExpect(jsonPath("$.data.draftStatus").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.data.sections[0].content").value(String.join("\n",
+                        String.join("\t", "할 일", "담당", "기한"), String.join("\t", "QA 일정표 공유", "김철수", "수요일까지"))));
+    }
+
+    @Test
+    void ai_service에_초안_기능이_없으면_입력_오류가_아니라_쓸_수_없음으로_답한다() throws Exception {
+        DRAFT_ENABLED.set(false);
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")
+                .andExpect(status().isOk());
+        awaitDraftStatus("FAILED");
+        call(writer, get("/api/minutes/" + minutesId), null)
+                .andExpect(jsonPath("$.data.draftError").value("DRAFT_UNAVAILABLE"));
+        call(writer, post("/api/minutes/" + minutesId + "/draft"), null)
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("DRAFT_UNAVAILABLE"));
+    }
+
+    @Test
+    void 초안을_만든_뒤_양식을_바꾸면_이전_줄로_다시_배치하고_결과로_칸을_바꾼다() throws Exception {
+        String requestId = firstDraft();
+        callback("""
+                {"requestId":"%s","status":"SUCCEEDED","header":null,"footer":null,"unplaced":[],"unplacedLines":[],
+                 "sections":[{"title":"안건별 논의","type":"text","aiFilled":true,"content":"해당 내용 없음","evidence":[]},
+                  {"title":"결정 사항","type":"text","aiFilled":true,"content":"- 배포 일정: 30일 배포","evidence":[
+                    {"sentence":"배포 일정: 30일 배포","transcriptSeqs":[1],"edited":false,"needsCheck":false,
+                     "sources":[{"agendaId":101,"kind":"decision","id":null,"decisionPointId":7}]}]},
+                  {"title":"미결 안건","type":"text","aiFilled":true,"content":"해당 내용 없음","evidence":[]},
+                  {"title":"할 일","type":"text","aiFilled":true,"content":"- QA 일정표 공유 (김철수, 수요일까지)","evidence":[
+                    {"sentence":"QA 일정표 공유 (김철수, 수요일까지)","transcriptSeqs":[2],"edited":false,"needsCheck":false,
+                     "sources":[{"agendaId":101,"kind":"todo","id":"k-10","decisionPointId":null}]}]}]}"""
+                .formatted(requestId));
+        int before = DRAFT_REQUESTS.size();
+
+        Long templateId = id(call(writer, post("/api/minutes-templates"), """
+                {"name":"새 양식","items":[{"title":"결정 사항","settings":{"recordType":"FREE"}},
+                 {"title":"메모","settings":{"recordType":"FREE"}}]}"""), "$.data.templateId");
+        // 바꾸는 응답에 다시 배치 중이 실려 화면이 결과를 기다린다
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
+                .andExpect(jsonPath("$.data.draftStatus").value("REQUESTED"))
+                .andExpect(jsonPath("$.data.sections[0].content").value("- 배포 일정: 30일 배포"));
+
+        String relayout = awaitDraftRequest(before);
+        assertThat(JsonPath.<List<Boolean>>read(relayout, "$.template.fields[*].aiFill")).containsExactly(true, true);
+        assertThat(JsonPath.<List<String>>read(relayout, "$.previousLines[*].sentence"))
+                .containsExactly("배포 일정: 30일 배포", "QA 일정표 공유 (김철수, 수요일까지)");
+        assertThat(JsonPath.<List<String>>read(relayout, "$.previousLines[*].title")).containsExactly("결정 사항", "할 일");
+        assertThat(JsonPath.<List<Boolean>>read(relayout, "$.previousLines[*].draftEdited")).containsOnly(false);
+        assertThat(JsonPath.<Integer>read(relayout, "$.previousLines[0].sources[0].decisionPointId")).isEqualTo(7);
+        String relayoutId = JsonPath.read(relayout, "$.requestId");
+
+        callback("""
+                {"requestId":"%s","status":"SUCCEEDED","header":null,"footer":null,"unplaced":[],
+                 "sections":[{"title":"결정 사항","type":"text","aiFilled":true,"content":"- 배포 일정: 30일 배포","evidence":[
+                    {"sentence":"배포 일정: 30일 배포","transcriptSeqs":[1],"edited":false,"needsCheck":false,"draftEdited":false,
+                     "sources":[{"agendaId":101,"kind":"decision","id":null,"decisionPointId":7}]}]},
+                  {"title":"메모","type":"text","aiFilled":true,"content":"해당 내용 없음","evidence":[]}],
+                 "unplacedLines":[{"title":"할 일","sentence":"QA 일정표 공유 (김철수, 수요일까지)","transcriptSeqs":[2],"edited":false,
+                   "needsCheck":false,"sources":[{"agendaId":101,"kind":"todo","id":"k-10","decisionPointId":null}],"draftEdited":false}]}"""
+                .formatted(relayoutId));
+
+        // 맞는 칸이 없는 줄은 잃지 않게 마지막 글 칸에 붙인다
+        call(writer, get("/api/minutes/" + minutesId), null)
+                .andExpect(jsonPath("$.data.draftStatus").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.data.sections[0].content").value("- 배포 일정: 30일 배포"))
+                .andExpect(jsonPath("$.data.sections[1].content").value("- QA 일정표 공유 (김철수, 수요일까지)"));
+    }
+
+    @Test
+    void 다시_배치_중에_작성자가_저장했으면_빈_칸만_채운다() throws Exception {
+        String requestId = firstDraft();
+        callback("""
+                {"requestId":"%s","status":"SUCCEEDED","header":null,"footer":null,"unplaced":[],"unplacedLines":[],
+                 "sections":[{"title":"결정 사항","type":"text","aiFilled":true,"content":"- 배포 일정: 30일 배포","evidence":[
+                    {"sentence":"배포 일정: 30일 배포","transcriptSeqs":[1],"edited":false,"needsCheck":false,
+                     "sources":[{"agendaId":101,"kind":"decision","id":null,"decisionPointId":7}]}]}]}"""
+                .formatted(requestId));
+        int before = DRAFT_REQUESTS.size();
+        Long templateId = id(call(writer, post("/api/minutes-templates"), """
+                {"name":"새 양식","items":[{"title":"결정 사항","settings":{"recordType":"FREE"}},
+                 {"title":"메모","settings":{"recordType":"FREE"}}]}"""), "$.data.templateId");
+        String detail = call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
+                .andReturn().getResponse().getContentAsString();
+        String relayoutId = JsonPath.read(awaitDraftRequest(before), "$.requestId");
+
+        List<Integer> sectionIds = JsonPath.read(detail, "$.data.sections[*].sectionId");
+        call(writer, put("/api/minutes/" + minutesId + "/sections"), """
+                {"version":%d,"sections":[{"sectionId":%d,"title":"결정 사항","content":"내가 고친 결정"},
+                 {"sectionId":%d,"title":"메모","content":""}]}"""
+                .formatted(JsonPath.<Integer>read(detail, "$.data.version"), sectionIds.get(0), sectionIds.get(1)))
+                .andExpect(status().isOk());
+
+        callback("""
+                {"requestId":"%s","status":"SUCCEEDED","header":null,"footer":null,"unplaced":[],"unplacedLines":[],
+                 "sections":[{"title":"결정 사항","type":"text","aiFilled":true,"content":"- 배포 일정: 30일 배포","evidence":[]},
+                  {"title":"메모","type":"text","aiFilled":true,"content":"- AI 메모","evidence":[]}]}"""
+                .formatted(relayoutId));
+
+        call(writer, get("/api/minutes/" + minutesId), null)
+                .andExpect(jsonPath("$.data.sections[0].content").value("내가 고친 결정"))
+                .andExpect(jsonPath("$.data.sections[1].content").value("- AI 메모"));
+    }
+
+    /** 기본 양식을 골라 첫 초안을 요청하게 하고 요청 번호를 돌려준다 */
+    private String firstDraft() throws Exception {
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")
+                .andExpect(status().isOk());
+        return JsonPath.read(awaitDraftRequest(), "$.requestId");
+    }
+
     private void awaitDraftStatus(String expected) throws Exception {
         long deadline = System.nanoTime() + 10_000_000_000L;
         String actual = null;
@@ -191,9 +329,14 @@ class DraftTest extends ApiTestSupport {
     }
 
     private String awaitDraftRequest() throws InterruptedException {
+        return awaitDraftRequest(0);
+    }
+
+    /** from번째 뒤로 온 이 회의록의 초안 요청 */
+    private String awaitDraftRequest(int from) throws InterruptedException {
         long deadline = System.nanoTime() + 10_000_000_000L;
         while (System.nanoTime() < deadline) {
-            for (String body : DRAFT_REQUESTS) {
+            for (String body : DRAFT_REQUESTS.subList(Math.min(from, DRAFT_REQUESTS.size()), DRAFT_REQUESTS.size())) {
                 if (body.contains("\"minutesId\":" + minutesId + ",")) {
                     return body;
                 }
@@ -217,6 +360,11 @@ class DraftTest extends ApiTestSupport {
             return;
         }
         if (path.equals("/internal/minutes/drafts")) {
+            if (!DRAFT_ENABLED.get()) {
+                respond(exchange, 404, "{\"detail\":\"Not Found\"}");
+                return;
+            }
+            REQUEST_ID_HEADERS.add(String.valueOf(exchange.getRequestHeaders().getFirst("X-Request-Id")));
             DRAFT_REQUESTS.add(body);
             respond(exchange, 202, "{\"requestId\":\"x\",\"status\":\"ACCEPTED\"}");
             return;

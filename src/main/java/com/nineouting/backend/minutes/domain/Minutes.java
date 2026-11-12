@@ -90,6 +90,14 @@ public class Minutes extends BaseTimeEntity {
     @Column(name = "draft_requested_at")
     private LocalDateTime draftRequestedAt;
 
+    /** AI 초안의 줄 목록 JSON (근거, 출처, 고친 표시). 양식을 바꿀 때 다시 배치의 재료가 된다 (DraftLines) */
+    @Column(name = "draft_lines", columnDefinition = "TEXT")
+    private String draftLines;
+
+    /** 다시 배치를 요청한 때의 contentVersion. 다시 배치가 아니면 null */
+    @Column(name = "draft_relayout_version")
+    private Integer draftRelayoutVersion;
+
     /** REQ-166 회의가 쓰레기통에 있으면 회의록도 숨긴다. null이면 보인다 */
     @Column(name = "trashed_at")
     private LocalDateTime trashedAt;
@@ -156,22 +164,36 @@ public class Minutes extends BaseTimeEntity {
         this.draftRequestId = requestId;
         this.draftError = null;
         this.draftRequestedAt = now;
+        this.draftRelayoutVersion = null;
+    }
+
+    /** 양식을 바꿔 다시 배치를 요청했다. 지금 contentVersion을 기억해 그사이 작성자가 저장했는지 본다 */
+    public void relayoutRequested(String requestId, LocalDateTime now) {
+        draftRequested(requestId, now);
+        this.draftRelayoutVersion = contentVersion;
+    }
+
+    public void keepDraftLines(String draftLines) {
+        this.draftLines = draftLines;
     }
 
     /** 기다리기 시작한 시각을 draftRequestedAt에 둔다 (기다리는 시간 한도의 기준) */
     public void draftWaitingForSource(LocalDateTime now) {
         this.draftStatus = DraftStatus.WAITING_SOURCE;
         this.draftRequestId = null;
+        this.draftRelayoutVersion = null;
         this.draftError = null;
         this.draftRequestedAt = now;
     }
 
     public void draftSucceeded() {
         this.draftStatus = DraftStatus.SUCCEEDED;
+        this.draftRelayoutVersion = null;
     }
 
     public void draftFailed(String error) {
         this.draftStatus = DraftStatus.FAILED;
+        this.draftRelayoutVersion = null;
         this.draftError = error == null ? null : error.substring(0, Math.min(error.length(), 100));
     }
 }
