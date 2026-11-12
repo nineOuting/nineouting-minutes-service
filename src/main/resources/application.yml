@@ -48,6 +48,12 @@ nineouting:
       source-check-interval: 10s
       source-wait: 10m
       in-progress-guard: 2m   # 요청한 뒤 이 시간 안에는 다시 요청하지 못한다 (DRAFT_IN_PROGRESS)
+    rag:
+      # REQ-185 작성 완료 회의록을 챗봇 검색용 저장소에 넣는다. ai-service, 콜백 주소는 위 draft 설정을 같이 쓴다 (docs/services/rag-chatbot.md)
+      send-interval: 5s
+      max-attempts: 5
+      retry-delay: 30s         # 실패할 때마다 두 배
+      accepted-timeout: 10m    # 접수 뒤 콜백이 이만큼 없으면 상태 조회
   clients:
     user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
     workspace-service-url: ${WORKSPACE_SERVICE_URL:http://localhost:8082}

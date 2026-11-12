@@ -3,6 +3,7 @@ package com.nineouting.backend.minutes.repository;
 import com.nineouting.backend.minutes.domain.Minutes;
 import com.nineouting.backend.minutes.domain.MinutesStatus;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +47,32 @@ public interface MinutesRepository extends JpaRepository<Minutes, Long> {
 
     @Query("select m.id from Minutes m where m.folderId in :folderIds")
     List<Long> findIdsByFolderIdIn(Collection<Long> folderIds);
+
+    /** REQ-185 챗봇이 찾을 회의록: 폴더의 작성 완료 회의록, 쓰레기통 제외, 최근 회의부터 */
+    @Query("""
+            select m.id from Minutes m
+            where m.folderId = :folderId and m.status = com.nineouting.backend.minutes.domain.MinutesStatus.CONFIRMED
+              and m.trashedAt is null
+            order by m.meetingStartAt desc, m.id desc""")
+    List<Long> findConfirmedIdsByFolderId(Long folderId, Pageable pageable);
+
+    /** 검색용 저장소에 보낼 차례인 회의록 하나. 여러 인스턴스가 같은 회의록을 보내지 않게 잠근다 */
+    @Query(value = """
+            select * from minutes
+            where rag_status = 'PENDING' and (rag_next_attempt_at is null or rag_next_attempt_at <= :now)
+            order by rag_next_attempt_at nulls first, id
+            limit 1
+            for update skip locked""", nativeQuery = true)
+    Optional<Minutes> lockNextRagDue(LocalDateTime now);
+
+    /** 접수됐는데 콜백이 오지 않은 회의록 하나 (상태 조회로 확인한다) */
+    @Query(value = """
+            select * from minutes
+            where rag_status = 'ACCEPTED' and rag_sent_at <= :sentBefore
+            order by rag_sent_at, id
+            limit 1
+            for update skip locked""", nativeQuery = true)
+    Optional<Minutes> lockNextRagStale(LocalDateTime sentBefore);
 
     @Modifying
     @Query("delete from Minutes m where m.id in :ids")
