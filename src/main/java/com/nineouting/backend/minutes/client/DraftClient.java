@@ -16,6 +16,8 @@ public class DraftClient {
 
     public enum Result { ACCEPTED, REJECTED, UNAVAILABLE }
 
+    private static final String REQUEST_ID_HEADER = "X-Request-Id";
+
     private final RestClient meetingService;
     private final RestClient aiService;
 
@@ -36,12 +38,19 @@ public class DraftClient {
         }
     }
 
-    /** 202면 ACCEPTED. 400 등 4xx는 다시 보내도 같아 REJECTED, 503·연결 실패는 UNAVAILABLE */
-    public Result requestDraft(String payloadJson) {
+    /**
+     * 202면 ACCEPTED. 400 등 4xx는 다시 보내도 같아 REJECTED, 503·연결 실패는 UNAVAILABLE.
+     * 404는 ai-service가 초안 기능을 켜지 않은 것이라(명세 2.2) UNAVAILABLE로 본다.
+     * X-Request-Id에 요청 번호를 실어 두 서비스 로그를 잇는다 (명세 1장 공통 규칙)
+     */
+    public Result requestDraft(String payloadJson, String requestId) {
         try {
             aiService.post().uri("/internal/minutes/drafts").contentType(MediaType.APPLICATION_JSON)
-                    .body(payloadJson).retrieve().toBodilessEntity();
+                    .header(REQUEST_ID_HEADER, requestId).body(payloadJson).retrieve().toBodilessEntity();
             return Result.ACCEPTED;
+        } catch (HttpClientErrorException.NotFound e) {
+            log.warn("ai-service에 초안 기능이 켜져 있지 않습니다 (requestId={})", requestId);
+            return Result.UNAVAILABLE;
         } catch (HttpClientErrorException e) {
             log.error("ai-service가 초안 요청을 거절했습니다: {} {}", e.getStatusCode(), e.getResponseBodyAsString());
             return Result.REJECTED;

@@ -22,11 +22,14 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -42,12 +45,14 @@ import tools.jackson.databind.node.ObjectNode;
  * AI 회의록 초안 (REQ-101~103, ai-service docs/api/minutes-draft-contract.md).
  * <ul>
  *   <li>재료: meeting-service의 안건과 점검을 마친 오늘 회의 요약(todaySummary final). 전사 전체는 보내지 않는다</li>
- *   <li>양식의 칸마다 비어 있으면 AI가 채우고(aiFill), 작성자가 이미 쓴 칸은 그대로 둔다. 표 칸은 ai-service가 아직
- *       채우지 못해(7.6 구현 전) 작성자가 채우는 칸으로 보낸다. 칸 설명·표의 열 개수·머리글·바닥글은 양식 그대로 (5.8, 2.1)</li>
+ *   <li>양식의 칸마다 비어 있으면 AI가 채우고(aiFill), 작성자가 이미 쓴 칸은 그대로 둔다. 글 칸과 표 칸 모두 같다 (표는 7.6).
+ *       칸 설명·표의 열 개수·머리글·바닥글은 양식 그대로 (5.8, 2.1)</li>
  *   <li>표 칸은 주고받을 때 마크다운 표, 저장은 줄 = 행·탭 = 열 (회의록 작성 화면 형식)</li>
  *   <li>양식을 처음 고르면 자동으로 요청하고(REQ-101 "선택한 양식에 맞춰"), 실패하면 작성자가 다시 요청한다</li>
  *   <li>오늘 회의 요약이 아직 없으면 기다리는 상태로 두고, 요약이 오면 자동으로 요청한다. 한도(10분)를 넘으면 실패로 둔다</li>
- *   <li>결과는 콜백으로 받아, 그사이 작성자가 쓴 칸은 덮어쓰지 않고 빈 칸만 채운다</li>
+ *   <li>결과는 콜백으로 받아, 그사이 작성자가 쓴 칸은 덮어쓰지 않고 빈 칸만 채운다. 채운 칸의 줄마다 근거, 출처를 저장한다 (DraftLines)</li>
+ *   <li>초안을 만든 뒤 양식을 바꾸면 바꾸기 전 칸의 줄을 previousLines로 보내 다시 배치한다 (명세 8장). 결과가 올 때까지
+ *       작성자가 저장하지 않았으면 결과로 칸을 바꾸고, 저장했으면 빈 칸만 채운다. 실패하면 제목이 같은 칸의 글을 옮긴 그대로 둔다</li>
  * </ul>
  */
 @Slf4j
@@ -111,6 +116,50 @@ public class DraftService {
         }
     }
 
+    /**
+     * 초안을 만든 뒤 양식을 바꾸면 같은 저장 안에서 다시 배치를 "만드는 중"으로 둔다. 양식 변경 응답에 이 상태가 실려
+     * 화면이 결과를 기다린다. 보낼 줄이 없거나 상한을 넘으면 제목이 같은 칸의 글을 옮긴 그대로 둔다 (REQ-140)
+     */
+    @EventListener
+    public void markRelayout(MinutesService.TemplateChanged event) {
+        if (!properties.enabled()) {
+            return;
+        }
+        Minutes minutes = access.requireForUpdate(event.minutesId());
+        // 초안을 한 번이라도 받아 줄을 저장해 둔 회의록만. 만드는 중이면 그 결과를 기다린다
+        if (minutes.getDraftLines() == null || !minutes.is(MinutesStatus.WRITING) || isInProgress(minutes)) {
+            return;
+        }
+        if (relayoutLines(minutes, event) == null) {
+            log.info("다시 배치할 줄이 없거나 상한을 넘어 제목이 같은 칸만 옮깁니다 (minutesId={})", minutes.getId());
+            return;
+        }
+        minutes.relayoutRequested(UUID.randomUUID().toString(), LocalDateTime.now(clock));
+    }
+
+    /** 저장이 끝난 뒤 다시 배치를 보낸다. 보내지 못하면 실패로 둔다 (칸은 제목이 같은 칸의 글을 옮긴 그대로) */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onTemplateChanged(MinutesService.TemplateChanged event) {
+        Minutes minutes = access.requireForUpdate(event.minutesId());
+        if (minutes.getDraftStatus() != DraftStatus.REQUESTED || minutes.getDraftRelayoutVersion() == null) {
+            return;
+        }
+        try {
+            send(minutes, relayoutLines(minutes, event), minutes.getDraftRequestId());
+        } catch (BusinessException e) {
+            log.info("양식을 바꾼 뒤 다시 배치를 요청하지 못했습니다 (minutesId={}): {}", minutes.getId(), e.getMessage());
+            minutes.draftFailed(e.getErrorCode().getCode());
+        }
+    }
+
+    /** 다시 배치의 이전 줄. 없거나 상한을 넘으면 null */
+    private ArrayNode relayoutLines(Minutes minutes, MinutesService.TemplateChanged event) {
+        ArrayNode lines = DraftLines.previousLines(event.before(),
+                minutes.getDraftLines() == null ? null : jsonMapper.readTree(minutes.getDraftLines()));
+        return lines == null || lines.isEmpty() ? null : lines;
+    }
+
     /** 오늘 회의 요약을 기다리는 초안: 요약이 오면 요청하고, 한도를 넘으면 실패로 둔다 */
     @Scheduled(fixedDelayString = "${nineouting.minutes.draft.source-check-interval:10s}")
     @Transactional
@@ -171,31 +220,75 @@ public class DraftService {
             return;
         }
         if (minutes.is(MinutesStatus.WRITING)) {
-            Map<String, String> drafted = new HashMap<>();
-            body.path("sections").forEach(section -> {
-                if (section.path("aiFilled").asBoolean(false)) {
-                    String content = section.path("content").asString("");
-                    drafted.put(section.path("title").asString(""),
-                            "table".equals(section.path("type").asString("")) ? fromMarkdownTable(content) : content);
-                }
-            });
-            List<MinutesSection> sections = sectionRepository.findByMinutesIdOrderByPosition(minutesId);
-            boolean changed = false;
-            for (MinutesSection section : sections) {
-                String content = drafted.get(section.getTitle());
-                if (section.getContent().isBlank() && content != null && !content.isBlank()) {
-                    section.change(section.getPosition(), section.getTitle(), content);
-                    changed = true;
-                }
-            }
-            if (changed) {
-                minutesService.recordDraft(minutes, sections);
-            }
+            apply(minutes, body);
         }
         minutes.draftSucceeded();
     }
 
+    /**
+     * 결과의 AI 칸을 반영한다. 다시 배치이고 그사이 작성자가 저장하지 않았으면 모든 칸을 결과로 바꾸고, 새 양식에 맞는
+     * 칸이 없는 줄(unplacedLines)은 잃지 않게 마지막 글 칸 끝에 붙인다. 그 밖에는 빈 칸만 채운다
+     */
+    private void apply(Minutes minutes, JsonNode body) {
+        boolean relayout = minutes.getDraftRelayoutVersion() != null
+                && minutes.getDraftRelayoutVersion() == minutes.getContentVersion();
+        Map<String, String> drafted = new HashMap<>();
+        body.path("sections").forEach(section -> {
+            if (relayout || section.path("aiFilled").asBoolean(false)) {
+                String content = section.path("content").asString("");
+                drafted.put(section.path("title").asString(""),
+                        "table".equals(section.path("type").asString("")) ? fromMarkdownTable(content) : content);
+            }
+        });
+        List<MinutesSection> sections = sectionRepository.findByMinutesIdOrderByPosition(minutes.getId());
+        Set<String> filled = new HashSet<>();
+        for (MinutesSection section : sections) {
+            String content = drafted.get(section.getTitle());
+            if ((relayout || section.getContent().isBlank()) && content != null && !content.isBlank()) {
+                section.change(section.getPosition(), section.getTitle(), content);
+                filled.add(section.getTitle());
+            }
+        }
+        if (relayout) {
+            keepUnplacedLines(minutes, sections, body.path("unplacedLines"));
+        }
+        if (!filled.isEmpty()) {
+            minutesService.recordDraft(minutes, sections);
+        }
+        List<ObjectNode> lines = DraftLines.fromResult(body.path("sections"), filled);
+        JsonNode stored = relayout || minutes.getDraftLines() == null ? null : jsonMapper.readTree(minutes.getDraftLines());
+        minutes.keepDraftLines(jsonMapper.writeValueAsString(DraftLines.replace(stored, filled, lines)));
+    }
+
+    /** 다시 배치에서 새 양식에 맞는 칸이 없는 줄: 버리지 않고 마지막 글 칸 끝에 붙인다 */
+    private void keepUnplacedLines(Minutes minutes, List<MinutesSection> sections, JsonNode unplacedLines) {
+        if (!unplacedLines.isArray() || unplacedLines.isEmpty()) {
+            return;
+        }
+        Set<String> tables = tableTitles(minutes.getTemplateId());
+        for (int index = sections.size() - 1; index >= 0; index--) {
+            MinutesSection section = sections.get(index);
+            if (tables.contains(section.getTitle())) {
+                continue;
+            }
+            List<String> lines = new ArrayList<>();
+            if (!section.getContent().isBlank() && !DraftLines.NOTHING.equals(section.getContent().strip())) {
+                lines.add(section.getContent());
+            }
+            unplacedLines.forEach(line -> lines.add("- " + line.path("sentence").asString("")));
+            section.change(section.getPosition(), section.getTitle(), String.join("\n", lines));
+            return;
+        }
+        log.warn("새 양식에 글 칸이 없어 칸에 맞지 않는 줄 {}개를 붙이지 못했습니다 (minutesId={})", unplacedLines.size(),
+                minutes.getId());
+    }
+
     private void send(Minutes minutes) {
+        send(minutes, null, UUID.randomUUID().toString());
+    }
+
+    /** previousLines가 있으면 다시 배치 (명세 8장). 다시 배치는 양식을 바꿀 때 정해 둔 요청 번호를 쓴다 */
+    private void send(Minutes minutes, ArrayNode previousLines, String requestId) {
         if (!properties.enabled()) {
             throw new BusinessException(MinutesErrorCode.DRAFT_UNAVAILABLE);
         }
@@ -206,19 +299,26 @@ public class DraftService {
         if (!source.path("ready").asBoolean(false)) {
             throw new BusinessException(MinutesErrorCode.DRAFT_SOURCE_NOT_READY);
         }
-        String requestId = UUID.randomUUID().toString();
-        DraftClient.Result result = draftClient.requestDraft(jsonMapper.writeValueAsString(body(minutes, source, requestId)));
+        ObjectNode body = body(minutes, source, requestId, previousLines);
+        DraftClient.Result result = draftClient.requestDraft(jsonMapper.writeValueAsString(body), requestId);
         switch (result) {
-            case ACCEPTED -> minutes.draftRequested(requestId, LocalDateTime.now(clock));
+            case ACCEPTED -> {
+                // 다시 배치는 양식을 바꿀 때 이미 "만드는 중"으로 두었다 (markRelayout)
+                if (previousLines == null) {
+                    minutes.draftRequested(requestId, LocalDateTime.now(clock));
+                }
+            }
             case REJECTED -> {
-                minutes.draftRequested(requestId, LocalDateTime.now(clock));
+                if (previousLines == null) {
+                    minutes.draftRequested(requestId, LocalDateTime.now(clock));
+                }
                 minutes.draftFailed("INVALID_INPUT");
             }
             default -> throw new BusinessException(MinutesErrorCode.DRAFT_UNAVAILABLE);
         }
     }
 
-    private ObjectNode body(Minutes minutes, JsonNode source, String requestId) {
+    private ObjectNode body(Minutes minutes, JsonNode source, String requestId, ArrayNode previousLines) {
         ObjectNode body = jsonMapper.createObjectNode();
         body.put("requestId", requestId);
         body.put("minutesId", minutes.getId());
@@ -231,12 +331,15 @@ public class DraftService {
                 .map(found -> jsonMapper.readTree(found.getLayout())).orElse(jsonMapper.createObjectNode());
         template.put("header", edge(layout.path("header")));
         template.put("footer", edge(layout.path("footer")));
-        template.set("fields", fields(minutes));
+        template.set("fields", fields(minutes, previousLines != null));
         body.set("agendas", source.path("agendas"));
         body.set("summary", source.path("summary"));
         // 확정된 전사 줄. ai-service가 STT 오인식 교정의 표기 출처로만 쓴다 (선택 칸, 없으면 빈 목록)
         JsonNode transcripts = source.path("transcripts");
         body.set("transcripts", transcripts.isArray() ? transcripts : jsonMapper.createArrayNode());
+        if (previousLines != null) {
+            body.set("previousLines", previousLines);
+        }
         body.put("callbackUrl", properties.callbackBaseUrl() + "/internal/minutes/" + minutes.getId() + "/draft-result");
         return body;
     }
@@ -247,8 +350,11 @@ public class DraftService {
         return settings.path("enabled").asBoolean(false) && !text.isBlank() ? text : null;
     }
 
-    /** 양식 칸 그대로. 비어 있는 글 칸만 AI가 채운다 (표 칸은 ai-service 7.6 구현 전이라 작성자 칸으로) */
-    private ArrayNode fields(Minutes minutes) {
+    /**
+     * 양식 칸 그대로. 비어 있는 칸은 AI가 채운다 (글 칸, 표 칸 모두). 다시 배치는 모든 칸을 AI가 채운다
+     * (칸의 글은 previousLines로 가므로, 제목이 같아 옮겨 온 글도 다시 고른다)
+     */
+    private ArrayNode fields(Minutes minutes, boolean relayout) {
         Map<String, TemplateItem> items = new HashMap<>();
         for (TemplateItem item : templateItemRepository.findByTemplateIdOrderByPosition(minutes.getTemplateId())) {
             items.put(item.getTitle(), item);
@@ -258,7 +364,7 @@ public class DraftService {
             TemplateItem item = items.get(section.getTitle());
             JsonNode settings = item == null ? jsonMapper.createObjectNode() : jsonMapper.readTree(item.getSettings());
             boolean table = "TABLE".equals(settings.path("recordType").asString(""));
-            boolean aiFill = !table && section.getContent().isBlank();
+            boolean aiFill = relayout || section.getContent().isBlank();
             ObjectNode field = fields.addObject();
             field.put("title", section.getTitle());
             field.put("description", item == null ? "" : item.getDescription());
@@ -272,6 +378,18 @@ public class DraftService {
             }
         }
         return fields;
+    }
+
+    private Set<String> tableTitles(Long templateId) {
+        Set<String> tables = new HashSet<>();
+        if (templateId != null) {
+            for (TemplateItem item : templateItemRepository.findByTemplateIdOrderByPosition(templateId)) {
+                if ("TABLE".equals(jsonMapper.readTree(item.getSettings()).path("recordType").asString(""))) {
+                    tables.add(item.getTitle());
+                }
+            }
+        }
+        return tables;
     }
 
     /** 저장 형식(줄 = 행, 탭 = 열, 첫 행은 머리 행) → 마크다운 표 */
