@@ -67,8 +67,10 @@ class DraftTest extends ApiTestSupport {
 
     @Test
     void 양식을_처음_고르면_빈_칸을_AI가_채우게_요청하고_결과로_빈_칸만_채운다() throws Exception {
+        // 고르는 응답에 이미 기다리는 중이 실려 화면이 초안을 기다린다 (요청은 저장이 끝난 뒤)
         call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.draftStatus").value("WAITING_SOURCE"));
 
         String request = awaitDraftRequest();
         assertThat(JsonPath.<Integer>read(request, "$.minutesId").longValue()).isEqualTo(minutesId);
