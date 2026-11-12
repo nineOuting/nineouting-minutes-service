@@ -195,6 +195,14 @@ public class Minutes extends BaseTimeEntity {
         this.ragErrorCode = errorCode;
     }
 
+    /** ai-service가 잠시 안 되거나 RAG가 꺼져 있다. 실패로 굳히지 않고 다음에 다시 보낸다 (횟수는 기다리는 간격에만 쓴다) */
+    public void ragRetryLater(String errorCode, LocalDateTime nextAttemptAt) {
+        this.ragAttempts++;
+        this.ragStatus = RagStatus.PENDING;
+        this.ragErrorCode = errorCode;
+        this.ragNextAttemptAt = nextAttemptAt;
+    }
+
     /** 다시 보낼 일. 횟수를 넘으면 실패로 둔다 */
     public void ragRetry(String errorCode, LocalDateTime nextAttemptAt, int maxAttempts) {
         this.ragAttempts++;
