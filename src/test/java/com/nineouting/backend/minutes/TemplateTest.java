@@ -61,7 +61,10 @@ class TemplateTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data.items[1].description").value("")), "$.data.templateId");
 
         call(me, get("/api/minutes-templates"), null)
-                .andExpect(jsonPath("$.data[0].items[0].description").value("각 안건에 대한 논의 내용을 정리할 수 있어요."))
+                .andExpect(jsonPath("$.data[0].items[0].description").value("안건마다 논의 내용을 표로 정리해요. 열은 No, 안건, 논의 내용, 비고예요."))
+                // 기본 양식 칸의 기록 방식 (V13, 디자인 Version02)
+                .andExpect(jsonPath("$.data[0].items[*].settings.recordType", contains("TABLE", "LIST", "LIST", "CHECKLIST")))
+                .andExpect(jsonPath("$.data[0].items[0].settings.table.cols").value(4))
                 .andExpect(jsonPath("$.data[1].templateId").value(templateId))
                 .andExpect(jsonPath("$.data[1].items[0].settings.titleSize").value(18))
                 .andExpect(jsonPath("$.data[1].items[1].settings.table.cols").value(3))

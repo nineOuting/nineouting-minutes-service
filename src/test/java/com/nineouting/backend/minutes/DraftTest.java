@@ -84,7 +84,7 @@ class DraftTest extends ApiTestSupport {
         assertThat(JsonPath.<String>read(request, "$.agendas[0].title")).isEqualTo("배포 일정");
         assertThat(JsonPath.<String>read(request, "$.agendas[0].decisionPoints[0].text")).isEqualTo("배포 날짜");
         assertThat(JsonPath.<String>read(request, "$.template.fields[1].description")).isEqualTo("회의에서 결정된 주요 사항을 정리합니다.");
-        assertThat(JsonPath.<List<String>>read(request, "$.template.fields[*].type")).containsOnly("text");
+        assertThat(JsonPath.<List<String>>read(request, "$.template.fields[*].type")).containsExactly("table", "text", "text", "text");
         assertThat(JsonPath.<Object>read(request, "$.template.header")).isNull();
         assertThat(JsonPath.<String>read(request, "$.summary.agendas[0].status")).isEqualTo("DECIDED");
         assertThat(JsonPath.<String>read(request, "$.transcripts[0].text")).isEqualTo("테라폼으로 올리죠");
