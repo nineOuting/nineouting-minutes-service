@@ -14,6 +14,7 @@ import java.util.List;
  * @param important         내 중요 표시 (개인 표시)
  * @param draftStatus       AI 초안 (REQ-101~103): REQUESTED면 화면에 "준비 중" (REQ-098), FAILED면 다시 요청할 수 있다. 요청 전이면 null
  * @param draftError        초안 실패 코드 (ai-service minutes-draft-contract.md 6장)
+ * @param richText          서식 기능(REQ-194)이 켜져 있는지. 꺼져 있으면 화면은 예전처럼 서식 없는 입력 칸을 쓴다
  */
 public record MinutesDetailResponse(
         Long minutesId,
@@ -35,6 +36,7 @@ public record MinutesDetailResponse(
         LocalDateTime confirmedAt,
         Long confirmedByUserId,
         DraftStatus draftStatus,
-        String draftError
+        String draftError,
+        boolean richText
 ) {
 }

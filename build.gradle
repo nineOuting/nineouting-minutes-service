@@ -55,6 +55,7 @@ dependencies {
     implementation 'org.flywaydb:flyway-database-postgresql'
     // REQ-137 회의록 PDF 다운로드
     implementation 'com.github.librepdf:openpdf:2.0.3'
+    implementation 'org.jsoup:jsoup:1.18.3'  // 회의록 칸 서식 정리, PDF 서식 (REQ-194)
     runtimeOnly 'org.postgresql:postgresql'
 
     compileOnly 'org.projectlombok:lombok'

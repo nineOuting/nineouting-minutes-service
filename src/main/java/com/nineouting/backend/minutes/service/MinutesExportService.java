@@ -1,5 +1,6 @@
 package com.nineouting.backend.minutes.service;
 
+import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
@@ -41,7 +42,8 @@ import org.springframework.stereotype.Service;
 /**
  * REQ-137 회의록 다운로드 (PDF / .docx). 회의록을 볼 수 있는 사람이면 받을 수 있다.
  * PDF는 한글이 깨지지 않게 나눔고딕(OFL, resources/fonts)을 넣고, 양식 설정(TemplateSettings)의 글자 크기·색·간격·여백·
- * 머릿글·바닥글·쪽 번호와 기록 방식(목록·체크리스트·표)을 따른다. .docx는 Word가 읽는 최소 XML 묶음을 직접 만든다.
+ * 머릿글·바닥글·쪽 번호와 기록 방식(목록·체크리스트·표)을 따른다. 줄글 칸에 서식(REQ-194)이 있으면 PDF에 굵게, 기울임,
+ * 밑줄, 목록, 정렬을 그린다. .docx는 Word가 읽는 최소 XML 묶음을 직접 만든다 (서식 없이 글만).
  */
 @Service
 @RequiredArgsConstructor
@@ -197,14 +199,34 @@ public class MinutesExportService {
                 case "LIST" -> addLines(document, section.content(), "• ", body);
                 case "CHECKLIST" -> addLines(document, section.content(), "□ ", body);
                 default -> {
-                    Paragraph content = new Paragraph(section.content(), body);
-                    content.setLeading(bodySize * 1.6f);
-                    document.add(content);
+                    if (section.richContent() != null) {
+                        addRich(document, section.richContent(), regular, bold, bodySize, textColor);
+                    } else {
+                        Paragraph content = new Paragraph(section.content(), body);
+                        content.setLeading(bodySize * 1.6f);
+                        document.add(content);
+                    }
                 }
             }
         }
         document.close();
         return out.toByteArray();
+    }
+
+    /** 서식 있는 줄글 칸 (REQ-194). 기울임은 PDF가 글자를 눕혀 흉내 낸다 (나눔고딕에 기울임 글꼴이 없다) */
+    private static void addRich(Document document, String html, BaseFont regular, BaseFont bold, float size, Color color) {
+        for (RichText.Block block : RichText.blocks(html)) {
+            Paragraph paragraph = new Paragraph();
+            paragraph.setLeading(size * 1.6f);
+            paragraph.setAlignment(align(block.align().toUpperCase(java.util.Locale.ROOT)));
+            Font plain = new Font(regular, size, Font.NORMAL, color);
+            paragraph.add(new Chunk(block.marker().isEmpty() && block.runs().isEmpty() ? " " : block.marker(), plain));
+            for (RichText.Run run : block.runs()) {
+                int fontStyle = (run.italic() ? Font.ITALIC : Font.NORMAL) | (run.underline() ? Font.UNDERLINE : Font.NORMAL);
+                paragraph.add(new Chunk(run.text(), new Font(run.bold() ? bold : regular, size, fontStyle, color)));
+            }
+            document.add(paragraph);
+        }
     }
 
     private static void addLines(Document document, String content, String marker, Font body) {

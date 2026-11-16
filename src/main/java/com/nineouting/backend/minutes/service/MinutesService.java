@@ -10,6 +10,7 @@ import com.nineouting.backend.common.web.error.CommonErrorCode;
 import com.nineouting.backend.minutes.domain.Minutes;
 import com.nineouting.backend.minutes.domain.MinutesAttendee;
 import com.nineouting.backend.minutes.domain.MinutesMark;
+import com.nineouting.backend.minutes.config.RichTextProperties;
 import com.nineouting.backend.minutes.domain.MinutesRevision;
 import com.nineouting.backend.minutes.domain.MinutesSection;
 import com.nineouting.backend.minutes.domain.MinutesStatus;
@@ -66,6 +67,7 @@ public class MinutesService {
     private final JsonMapper jsonMapper;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final RichTextProperties richText;
 
     /**
      * 회의 마무리(REQ-098)를 받아 작성 중인 회의록을 만든다. 같은 회의는 한 번만 만든다.
@@ -182,11 +184,12 @@ public class MinutesService {
         List<MinutesSection> sections = new ArrayList<>();
         for (int position = 0; position < requests.size(); position++) {
             SectionRequest request = requests.get(position);
+            String rich = richText.enabled() ? RichText.sanitize(request.richContent()) : null;
             MinutesSection section = request.sectionId() == null ? null : existing.remove(request.sectionId());
             if (section == null) {
-                section = sectionRepository.save(new MinutesSection(minutesId, position, request.title(), request.content()));
+                section = sectionRepository.save(new MinutesSection(minutesId, position, request.title(), request.content(), rich));
             } else {
-                section.change(position, request.title(), request.content());
+                section.change(position, request.title(), request.content(), rich);
             }
             sections.add(section);
         }
@@ -225,10 +228,12 @@ public class MinutesService {
                 PersonResponse.of(minutes.getWriterUserId(), users.get(minutes.getWriterUserId())),
                 attendeeIds.stream().map(id -> PersonResponse.of(id, users.get(id))).toList(),
                 minutes.getTemplateId(), minutes.getContentVersion(), minutes.getReviewRound(),
-                sectionRepository.findByMinutesIdOrderByPosition(minutes.getId()).stream().map(SectionResponse::from).toList(),
+                sectionRepository.findByMinutesIdOrderByPosition(minutes.getId()).stream()
+                        .map(section -> SectionResponse.from(section, richText.enabled())).toList(),
                 mark.map(MinutesMark::isFavorite).orElse(false),
                 mark.map(MinutesMark::isImportant).orElse(false),
-                minutes.getConfirmedAt(), minutes.getConfirmedByUserId(), minutes.getDraftStatus(), minutes.getDraftError());
+                minutes.getConfirmedAt(), minutes.getConfirmedByUserId(), minutes.getDraftStatus(), minutes.getDraftError(),
+                richText.enabled());
     }
 
     /** AI 초안으로 빈 칸을 채웠다 (DraftService). 작성자가 고친 것처럼 저장 기록을 남긴다 */
