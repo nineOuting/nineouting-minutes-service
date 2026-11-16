@@ -104,7 +104,7 @@ class MinutesRagTest extends ApiTestSupport {
         minutesRagSync.run();
         String second = ingests(minutesId).getLast();
         assertThat(Integer.parseInt(JsonPath.read(second, "$.docVersion"))).isGreaterThan(Integer.parseInt(firstVersion));
-        assertThat(JsonPath.<String>read(second, "$.minutes.sections[0].content")).isEqualTo("고친 논의");
+        assertThat(JsonPath.<String>read(second, "$.minutes.sections[0].content")).isEqualTo("| 고친 논의 |\n|---|");
         callback(minutesId, firstVersion, "ready");
         assertThat(minutesRepository.findById(minutesId).orElseThrow().getRagStatus()).isEqualTo(RagStatus.ACCEPTED);
     }
