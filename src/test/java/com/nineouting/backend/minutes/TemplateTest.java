@@ -23,7 +23,8 @@ class TemplateTest extends ApiTestSupport {
 
         Long templateId = id(call(me, post("/api/minutes-templates"), "{\"name\":\"짧은 양식\",\"items\":[{\"title\":\"요약\"},{\"title\":\"할 일\"}]}")
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.isDefault").value(false)), "$.data.templateId");
+                .andExpect(jsonPath("$.data.isDefault").value(false))
+                .andExpect(jsonPath("$.data.updatedAt").isNotEmpty()), "$.data.templateId");
 
         call(me, get("/api/minutes-templates"), null)
                 .andExpect(jsonPath("$.data[*].name", contains("기본 양식", "짧은 양식")))

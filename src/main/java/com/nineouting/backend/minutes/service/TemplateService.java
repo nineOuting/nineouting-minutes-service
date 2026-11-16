@@ -91,8 +91,10 @@ public class TemplateService {
         Template template = requireOwn(templateId, userId);
         template.change(request.name(), request.description(), settings.write(layoutToSave(request.layout())));
         itemRepository.deleteByTemplateId(templateId);
+        LocalDateTime now = LocalDateTime.now(clock);
+        templateRepository.touch(templateId, now);
         return response(template, saveItems(templateId, request.items()),
-                favoriteRepository.existsByTemplateIdAndUserId(templateId, userId));
+                favoriteRepository.existsByTemplateIdAndUserId(templateId, userId), now);
     }
 
     @Transactional
@@ -166,11 +168,16 @@ public class TemplateService {
     }
 
     private TemplateResponse response(Template template, List<TemplateItem> items, boolean favorite) {
+        return response(template, items, favorite, template.getUpdatedAt());
+    }
+
+    private TemplateResponse response(Template template, List<TemplateItem> items, boolean favorite,
+                                      LocalDateTime updatedAt) {
         return new TemplateResponse(template.getId(), template.getName(), template.getDescription(), template.isDefault(),
                 items.stream()
                         .map(item -> new TemplateResponse.TemplateItemResponse(item.getTitle(), item.getDescription(),
                                 settings.read(item.getSettings())))
                         .toList(),
-                layoutToShow(template.getLayout()), favorite);
+                layoutToShow(template.getLayout()), favorite, updatedAt);
     }
 }
