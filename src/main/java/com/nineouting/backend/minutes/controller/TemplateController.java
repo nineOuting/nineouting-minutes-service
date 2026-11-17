@@ -73,4 +73,20 @@ public class TemplateController {
         templateService.favorite(templateId, user.userId(), false);
         return ApiResponse.ok();
     }
+
+    /** REQ-199 워크스페이스 기본 양식으로 정한 내 양식을 그 워크스페이스 멤버 모두 쓰게 한다 */
+    @PutMapping("/{templateId}/workspace-shares/{workspaceId}")
+    public ApiResponse<Void> share(@CurrentUser AuthenticatedUser user, @PathVariable Long templateId,
+                                   @PathVariable Long workspaceId) {
+        templateService.share(templateId, workspaceId, user.userId(), true);
+        return ApiResponse.ok();
+    }
+
+    /** REQ-199 기본 양식에서 빼면 공유도 거둔다 */
+    @DeleteMapping("/{templateId}/workspace-shares/{workspaceId}")
+    public ApiResponse<Void> unshare(@CurrentUser AuthenticatedUser user, @PathVariable Long templateId,
+                                     @PathVariable Long workspaceId) {
+        templateService.share(templateId, workspaceId, user.userId(), false);
+        return ApiResponse.ok();
+    }
 }

@@ -15,6 +15,7 @@ import java.util.List;
  * @param draftStatus       AI 초안 (REQ-101~103): REQUESTED면 화면에 "준비 중" (REQ-098), FAILED면 다시 요청할 수 있다. 요청 전이면 null
  * @param draftError        초안 실패 코드 (ai-service minutes-draft-contract.md 6장)
  * @param richText          서식 기능(REQ-194)이 켜져 있는지. 꺼져 있으면 화면은 예전처럼 서식 없는 입력 칸을 쓴다
+ * @param template          쓰는 양식의 레이아웃과 칸 설정. 참석자가 양식 목록에서 볼 수 없는 개인 양식이어도 회의록을 같은 모양으로 그린다 (2026-11-17). 양식이 없으면 null
  */
 public record MinutesDetailResponse(
         Long minutesId,
@@ -37,6 +38,7 @@ public record MinutesDetailResponse(
         Long confirmedByUserId,
         DraftStatus draftStatus,
         String draftError,
-        boolean richText
+        boolean richText,
+        TemplateResponse template
 ) {
 }
