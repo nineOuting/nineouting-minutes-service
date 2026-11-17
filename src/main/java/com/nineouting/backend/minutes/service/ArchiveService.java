@@ -11,6 +11,7 @@ import com.nineouting.backend.minutes.domain.MinutesReview;
 import com.nineouting.backend.minutes.domain.MinutesStatus;
 import com.nineouting.backend.minutes.domain.MinutesView;
 import com.nineouting.backend.minutes.domain.ReviewStatus;
+import com.nineouting.backend.minutes.dto.ArchiveFolderCountResponse;
 import com.nineouting.backend.minutes.dto.ArchiveItemResponse;
 import com.nineouting.backend.minutes.dto.ArchivePageResponse;
 import com.nineouting.backend.minutes.dto.ArchiveSort;
@@ -102,10 +103,14 @@ public class ArchiveService {
     @Transactional(readOnly = true)
     public WorkspaceArchivePageResponse workspaceMinutes(Long workspaceId, Long userId, String query, LocalDate from,
                                                          LocalDate to, List<String> locations, List<Long> attendeeIds,
-                                                         ArchiveSort sort, int page, int size) {
+                                                         ArchiveSort sort, Long folderId, int page, int size) {
         int pageNumber = Math.max(page, 0);
         int pageSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
         Map<Long, AccessibleFolder> folders = foldersOf(workspaceId, userId);
+        if (folderId != null) {
+            // 들어갈 수 없는 폴더를 고르면 빈 목록
+            folders.keySet().retainAll(List.of(folderId));
+        }
         if (folders.isEmpty()) {
             return new WorkspaceArchivePageResponse(List.of(), pageNumber, pageSize, 0, false);
         }
@@ -137,6 +142,16 @@ public class ArchiveService {
                 .toList();
         boolean hasNext = (long) (pageNumber + 1) * pageSize < result.totalCount();
         return new WorkspaceArchivePageResponse(items, pageNumber, pageSize, result.totalCount(), hasNext);
+    }
+
+    /** 아카이브 폴더 탭: 내가 들어갈 수 있는 폴더마다 목록에 보이는 회의록 수 */
+    @Transactional(readOnly = true)
+    public List<ArchiveFolderCountResponse> folderCounts(Long workspaceId, Long userId) {
+        return foldersOf(workspaceId, userId).keySet().stream()
+                .map(folderId -> new ArchiveFolderCountResponse(folderId, searchRepository.search(
+                        new MinutesSearchRepository.Filter(List.of(folderId), null, null, null, null, List.of(), List.of(),
+                                null, userId, false), 0, 1).totalCount()))
+                .toList();
     }
 
     /** REQ-055. 장소 필터의 선택지: 워크스페이스에서 내가 볼 수 있는 회의록의 장소, 가나다순 */
@@ -175,7 +190,8 @@ public class ArchiveService {
                 .map(view -> {
                     Minutes minutes = found.get(view.getMinutesId());
                     return new ViewedMinutesResponse(minutes.getId(), minutes.getMeetingId(), minutes.getTitle(),
-                            minutes.getMeetingStartAt(), view.getViewedAt());
+                            minutes.getMeetingStartAt(), view.getViewedAt(), minutes.getFolderId(),
+                            folders.get(minutes.getFolderId()).name());
                 })
                 .toList();
     }

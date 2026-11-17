@@ -3,6 +3,7 @@ package com.nineouting.backend.minutes.controller;
 import com.nineouting.backend.common.security.jwt.AuthenticatedUser;
 import com.nineouting.backend.common.security.web.CurrentUser;
 import com.nineouting.backend.common.web.response.ApiResponse;
+import com.nineouting.backend.minutes.dto.ArchiveFolderCountResponse;
 import com.nineouting.backend.minutes.dto.ArchivePageResponse;
 import com.nineouting.backend.minutes.dto.ArchiveSort;
 import com.nineouting.backend.minutes.dto.MarkFilter;
@@ -50,7 +51,10 @@ public class ArchiveController {
                 page, size));
     }
 
-    /** REQ-053~055. q: 회의명·내용, from·to: 회의 날짜, location·attendeeId: 여러 개 가능, sort: LATEST / OLDEST */
+    /**
+     * REQ-053~055. q: 회의명·내용, from·to: 회의 날짜, location·attendeeId: 여러 개 가능, sort: LATEST / OLDEST,
+     * folderId: 폴더 탭에서 고른 폴더만 (없으면 전체)
+     */
     @GetMapping("/api/workspaces/{workspaceId}/minutes")
     public ApiResponse<WorkspaceArchivePageResponse> workspaceMinutes(@CurrentUser AuthenticatedUser user,
                                                                       @PathVariable Long workspaceId,
@@ -60,10 +64,18 @@ public class ArchiveController {
                                                                       @RequestParam(required = false) List<String> location,
                                                                       @RequestParam(required = false) List<Long> attendeeId,
                                                                       @RequestParam(defaultValue = "LATEST") ArchiveSort sort,
+                                                                      @RequestParam(required = false) Long folderId,
                                                                       @RequestParam(defaultValue = "0") int page,
                                                                       @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) int size) {
         return ApiResponse.ok(archiveService.workspaceMinutes(workspaceId, user.userId(), q, from, to, location, attendeeId,
-                sort, page, size));
+                sort, folderId, page, size));
+    }
+
+    /** 아카이브 폴더 탭의 회의록 수: 내가 들어갈 수 있는 폴더마다 (검색어, 필터와 상관없이 전체) */
+    @GetMapping("/api/workspaces/{workspaceId}/minutes/folder-counts")
+    public ApiResponse<List<ArchiveFolderCountResponse>> folderCounts(@CurrentUser AuthenticatedUser user,
+                                                                      @PathVariable Long workspaceId) {
+        return ApiResponse.ok(archiveService.folderCounts(workspaceId, user.userId()));
     }
 
     /** REQ-055 장소 필터의 선택지 */
