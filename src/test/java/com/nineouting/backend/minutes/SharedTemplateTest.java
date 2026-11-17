@@ -36,7 +36,8 @@ class SharedTemplateTest extends ApiTestSupport {
         call(owner, put(share), null).andExpect(status().isOk());
 
         call(member, get("/api/minutes-templates"), null)
-                .andExpect(jsonPath("$.data[*].templateId", hasItem(templateId.intValue())));
+                .andExpect(jsonPath("$.data[*].templateId", hasItem(templateId.intValue())))
+                .andExpect(jsonPath("$.data[?(@.templateId == " + templateId + ")].shared", hasItem(true)));
         call(outsider, get("/api/minutes-templates"), null)
                 .andExpect(jsonPath("$.data[*].templateId", not(hasItem(templateId.intValue()))));
 

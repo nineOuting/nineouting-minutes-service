@@ -73,8 +73,11 @@ public class TemplateService {
                 .map(TemplateFavorite::getTemplateId)
                 .collect(Collectors.toSet());
         return templates.stream()
-                .map(template -> response(template, items.getOrDefault(template.getId(), List.of()),
-                        favorites.contains(template.getId())))
+                .map(template -> {
+                    TemplateResponse response = response(template, items.getOrDefault(template.getId(), List.of()),
+                            favorites.contains(template.getId()));
+                    return sharedIds.contains(template.getId()) ? response.asShared() : response;
+                })
                 .toList();
     }
 
@@ -239,6 +242,6 @@ public class TemplateService {
                         .map(item -> new TemplateResponse.TemplateItemResponse(item.getTitle(), item.getDescription(),
                                 settings.read(item.getSettings())))
                         .toList(),
-                layoutToShow(template.getLayout()), favorite, updatedAt);
+                layoutToShow(template.getLayout()), favorite, updatedAt, false);
     }
 }
