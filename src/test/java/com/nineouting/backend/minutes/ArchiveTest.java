@@ -143,6 +143,16 @@ class ArchiveTest extends ApiTestSupport {
         call(folderMember, get(url), null)
                 .andExpect(jsonPath("$.data.items[*].minutesId", contains(third.intValue(), first.intValue())));
         call(newId(), get(url), null).andExpect(jsonPath("$.data.totalCount").value(0));
+        // 폴더 탭: 고른 폴더만, 들어갈 수 없는 폴더면 빈 목록
+        call(writer, get(url).param("folderId", planning.toString()), null)
+                .andExpect(jsonPath("$.data.items[*].minutesId", contains(third.intValue(), first.intValue())));
+        call(folderMember, get(url).param("folderId", design.toString()), null)
+                .andExpect(jsonPath("$.data.totalCount").value(0));
+        call(writer, get(url + "/folder-counts"), null)
+                .andExpect(jsonPath("$.data[?(@.folderId == " + planning + ")].minutesCount", contains(2)))
+                .andExpect(jsonPath("$.data[?(@.folderId == " + design + ")].minutesCount", contains(1)))
+                .andExpect(jsonPath("$.data.length()").value(2));
+        call(folderMember, get(url + "/folder-counts"), null).andExpect(jsonPath("$.data.length()").value(1));
 
         call(writer, get(url + "/locations"), null)
                 .andExpect(jsonPath("$.data[*]", contains("회의실 A", "회의실 B")));
@@ -168,7 +178,8 @@ class ArchiveTest extends ApiTestSupport {
         call(folderMember, post("/api/minutes/" + first + "/view"), null).andExpect(status().isOk());
         call(folderMember, get(url).param("size", "1"), null)
                 .andExpect(jsonPath("$.data[*].minutesId", contains(first.intValue())))
-                .andExpect(jsonPath("$.data[0].title").value("첫 회의"));
+                .andExpect(jsonPath("$.data[0].title").value("첫 회의"))
+                .andExpect(jsonPath("$.data[0].folderName").value("기획"));
         call(writer, get(url), null).andExpect(jsonPath("$.data.length()").value(0));
         call(newId(), post("/api/minutes/" + first + "/view"), null).andExpect(status().isForbidden());
     }
