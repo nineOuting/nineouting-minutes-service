@@ -130,6 +130,9 @@ class ArchiveTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data.totalCount").value(3));
         call(writer, get(url).param("sort", "OLDEST"), null)
                 .andExpect(jsonPath("$.data.items[*].minutesId", contains(first.intValue(), second.intValue(), third.intValue())));
+        // REQ-167 회의명순: 기획 < 디자인 < 온라인
+        call(writer, get(url).param("sort", "TITLE"), null)
+                .andExpect(jsonPath("$.data.items[*].minutesId", contains(first.intValue(), second.intValue(), third.intValue())));
         // 장소는 고른 것 중 하나와 같아야 한다
         call(writer, get(url).param("location", "회의실 A", "회의실 B"), null)
                 .andExpect(jsonPath("$.data.items[*].minutesId", contains(second.intValue(), first.intValue())));

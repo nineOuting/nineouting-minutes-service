@@ -77,7 +77,7 @@ public class ArchiveService {
         int pageSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
         MinutesSearchRepository.Page result = searchRepository.search(new MinutesSearchRepository.Filter(List.of(folderId),
                 query, from, to, location, List.of(), attendeeId == null ? List.of() : List.of(attendeeId),
-                mark == null ? null : mark.name(), userId, false), pageNumber, pageSize);
+                mark == null ? null : mark.name(), userId, ArchiveSort.LATEST), pageNumber, pageSize);
 
         Map<Long, Minutes> found = minutesRepository.findAllById(result.ids()).stream()
                 .collect(Collectors.toMap(Minutes::getId, Function.identity()));
@@ -115,7 +115,7 @@ public class ArchiveService {
             return new WorkspaceArchivePageResponse(List.of(), pageNumber, pageSize, 0, false);
         }
         MinutesSearchRepository.Page result = searchRepository.search(new MinutesSearchRepository.Filter(folders.keySet(),
-                query, from, to, null, nonNull(locations), nonNull(attendeeIds), null, userId, sort == ArchiveSort.OLDEST),
+                query, from, to, null, nonNull(locations), nonNull(attendeeIds), null, userId, sort),
                 pageNumber, pageSize);
 
         Map<Long, Minutes> found = minutesRepository.findAllById(result.ids()).stream()
@@ -150,7 +150,7 @@ public class ArchiveService {
         return foldersOf(workspaceId, userId).keySet().stream()
                 .map(folderId -> new ArchiveFolderCountResponse(folderId, searchRepository.search(
                         new MinutesSearchRepository.Filter(List.of(folderId), null, null, null, null, List.of(), List.of(),
-                                null, userId, false), 0, 1).totalCount()))
+                                null, userId, ArchiveSort.LATEST), 0, 1).totalCount()))
                 .toList();
     }
 
