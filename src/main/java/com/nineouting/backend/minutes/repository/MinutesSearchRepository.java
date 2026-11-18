@@ -1,5 +1,6 @@
 package com.nineouting.backend.minutes.repository;
 
+import com.nineouting.backend.minutes.dto.ArchiveSort;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.time.LocalDate;
@@ -11,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 /**
- * 아카이브 검색·필터 (REQ-053~055, 056(레거시)). 작성 중·검토 중·확정 모두, 회의 날짜 최신순(또는 오래된순).
+ * 아카이브 검색·필터 (REQ-053~055, 056(레거시)). 작성 중·검토 중·확정 모두, 회의 날짜 최신순(또는 오래된순, 회의명순).
  * 검색어는 대소문자를 구분하지 않는 부분 일치(ILIKE)로 찾는다. 글자 3개 단위 인덱스(pg_trgm)가 받쳐 준다.
  * 태그도 대소문자를 구분하지 않는다.
  */
@@ -26,11 +27,11 @@ public class MinutesSearchRepository {
      * @param locations   장소가 이 중 하나와 같아야 한다 (워크스페이스 아카이브 장소 필터). 비었으면 전체
      * @param attendeeIds 이 중 한 명이라도 참석했어야 한다. 비었으면 전체
      * @param mark        FAVORITE / IMPORTANT면 viewerId가 표시한 회의록만. null이면 전체
-     * @param oldestFirst true면 회의 날짜 오래된순
+     * @param sort        회의 날짜 최신순(기본), 오래된순, 회의명순(같으면 최신순)
      */
     public record Filter(Collection<Long> folderIds, String query, LocalDate from, LocalDate to, String location,
                          Collection<String> locations, Collection<Long> attendeeIds, String mark, Long viewerId,
-                         boolean oldestFirst) {
+                         ArchiveSort sort) {
     }
 
     public record Page(List<Long> ids, long totalCount) {
@@ -41,7 +42,7 @@ public class MinutesSearchRepository {
         String where = where(filter, params);
 
         Query select = entityManager.createNativeQuery("select m.id from minutes m " + where
-                + (filter.oldestFirst() ? " order by m.meeting_start_at, m.id" : " order by m.meeting_start_at desc, m.id desc")
+                + orderBy(filter.sort())
                 + " limit :limit offset :offset", Long.class);
         Query count = entityManager.createNativeQuery("select count(*) from minutes m " + where, Long.class);
         params.forEach((name, value) -> {
@@ -54,6 +55,15 @@ public class MinutesSearchRepository {
         @SuppressWarnings("unchecked")
         List<Long> ids = select.getResultList();
         return new Page(ids, ((Number) count.getSingleResult()).longValue());
+    }
+
+    private static String orderBy(ArchiveSort sort) {
+        return switch (sort == null ? ArchiveSort.LATEST : sort) {
+            case OLDEST -> " order by m.meeting_start_at, m.id";
+            // 한글은 유니코드 순서가 가나다순이다. DB 기본 정렬 규칙(en_US.utf8)은 한글 순서가 맞지 않아 "C"로 비교한다
+            case TITLE -> " order by m.title collate \"C\", m.meeting_start_at desc, m.id desc";
+            case LATEST -> " order by m.meeting_start_at desc, m.id desc";
+        };
     }
 
     private static String where(Filter filter, Map<String, Object> params) {

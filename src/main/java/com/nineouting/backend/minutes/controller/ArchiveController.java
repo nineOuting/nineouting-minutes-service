@@ -52,7 +52,7 @@ public class ArchiveController {
     }
 
     /**
-     * REQ-053~055. q: 회의명·내용, from·to: 회의 날짜, location·attendeeId: 여러 개 가능, sort: LATEST / OLDEST,
+     * REQ-053~055. q: 회의명·내용, from·to: 회의 날짜, location·attendeeId: 여러 개 가능, sort: LATEST / OLDEST / TITLE(회의명순, REQ-167),
      * folderId: 폴더 탭에서 고른 폴더만 (없으면 전체)
      */
     @GetMapping("/api/workspaces/{workspaceId}/minutes")
