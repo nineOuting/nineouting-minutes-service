@@ -68,6 +68,7 @@ public class MinutesService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final RichTextProperties richText;
+    private final TemplateService templateService;
 
     /**
      * 회의 마무리(REQ-098)를 받아 작성 중인 회의록을 만든다. 같은 회의는 한 번만 만든다.
@@ -86,7 +87,7 @@ public class MinutesService {
         attendees.forEach(userId -> attendeeRepository.save(new MinutesAttendee(minutes.getId(), userId)));
         if (event.templateId() != null) {
             templateRepository.findById(event.templateId())
-                    .filter(template -> template.isUsableBy(event.writerUserId()))
+                    .filter(template -> templateService.isUsableIn(template, event.writerUserId(), event.workspaceId()))
                     .ifPresent(template -> applyTemplate(minutes, template, event.writerUserId()));
         }
     }
@@ -122,7 +123,7 @@ public class MinutesService {
             throw new BusinessException(MinutesErrorCode.MINUTES_NOT_WRITING);
         }
         Template template = templateRepository.findById(templateId)
-                .filter(found -> found.isUsableBy(userId))
+                .filter(found -> templateService.isUsableIn(found, userId, minutes.getWorkspaceId()))
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
         applyTemplate(minutes, template, userId);
         return detail(minutes, userId);
@@ -233,7 +234,7 @@ public class MinutesService {
                 mark.map(MinutesMark::isFavorite).orElse(false),
                 mark.map(MinutesMark::isImportant).orElse(false),
                 minutes.getConfirmedAt(), minutes.getConfirmedByUserId(), minutes.getDraftStatus(), minutes.getDraftError(),
-                richText.enabled());
+                richText.enabled(), templateService.snapshot(minutes.getTemplateId()));
     }
 
     /** AI 초안으로 빈 칸을 채웠다 (DraftService). 작성자가 고친 것처럼 저장 기록을 남긴다 */
