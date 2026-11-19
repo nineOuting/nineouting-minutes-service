@@ -1,0 +1,28 @@
+# 의존성 업데이트 PR (매주). 비슷한 것끼리 PR 하나로 묶는다.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+    groups:
+      gradle-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # 공통 모듈은 GitHub Packages라 Dependabot이 읽을 수 없고, 버전은 사람이 올린다
+      - dependency-name: com.nineouting.backend:*
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Seoul
+    groups:
+      actions:
+        patterns: ['*']
