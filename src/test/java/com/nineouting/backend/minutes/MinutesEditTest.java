@@ -56,6 +56,20 @@ class MinutesEditTest extends ApiTestSupport {
     }
 
     @Test
+    void 탈퇴하면_내가_작성자인_회의록만_모두_지워진다() throws Exception {
+        Long mine = finishMeeting(newId(), folderId, "내 회의", START, writer, writer, attendee);
+        writeContent(mine, writer, "내용");
+        Long othersMeeting = newId();
+        Long others = finishMeeting(othersMeeting, folderId, "다른 사람 회의", START, attendee, attendee, writer);
+
+        call(writer, org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/minutes/mine"), null)
+                .andExpect(status().isOk());
+
+        call(attendee, get("/api/minutes/" + mine), null).andExpect(status().isNotFound());
+        call(attendee, get("/api/minutes/" + others), null).andExpect(status().isOk());
+    }
+
+    @Test
     void 같은_회의의_마무리를_두_번_받아도_회의록은_하나다() throws Exception {
         Long meetingId = newId();
         Long first = finishMeeting(meetingId, folderId, "회의", START, writer, writer);

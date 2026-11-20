@@ -15,6 +15,9 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface MinutesRepository extends JpaRepository<Minutes, Long> {
 
+    /** REQ-207 탈퇴: 내가 작성자인 회의록 (쓰레기통 포함) */
+    List<Minutes> findByWriterUserId(Long writerUserId);
+
     Optional<Minutes> findByMeetingId(Long meetingId);
 
     boolean existsByMeetingId(Long meetingId);

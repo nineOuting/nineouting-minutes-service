@@ -20,6 +20,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,6 +38,13 @@ public class MinutesController {
     private final MinutesExportService exportService;
     private final ReviewService reviewService;
     private final DraftService draftService;
+
+    /** REQ-207 탈퇴: 내가 작성자인 회의록을 모두 지운다. 경로가 구체적이라 {minutesId}보다 먼저 맞는다 */
+    @DeleteMapping("/api/minutes/mine")
+    public ApiResponse<Void> purgeMine(@CurrentUser AuthenticatedUser user) {
+        minutesService.purgeWrittenBy(user.userId());
+        return ApiResponse.ok();
+    }
 
     /** REQ-020: 회의에서 회의록으로 이동 */
     @GetMapping("/api/meetings/{meetingId}/minutes")

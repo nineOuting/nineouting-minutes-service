@@ -69,6 +69,7 @@ public class MinutesService {
     private final Clock clock;
     private final RichTextProperties richText;
     private final TemplateService templateService;
+    private final MinutesPurger minutesPurger;
 
     /**
      * 회의 마무리(REQ-098)를 받아 작성 중인 회의록을 만든다. 같은 회의는 한 번만 만든다.
@@ -90,6 +91,14 @@ public class MinutesService {
                     .filter(template -> templateService.isUsableIn(template, event.writerUserId(), event.workspaceId()))
                     .ifPresent(template -> applyTemplate(minutes, template, event.writerUserId()));
         }
+    }
+
+    /** REQ-207 탈퇴: 내가 작성자인 회의록을 모두 영구 삭제한다 (되돌릴 수 없다) */
+    @Transactional
+    public int purgeWrittenBy(Long userId) {
+        List<Long> ids = minutesRepository.findByWriterUserId(userId).stream().map(Minutes::getId).toList();
+        minutesPurger.purge(ids);
+        return ids.size();
     }
 
     /** 회의에서 회의록으로 이동 (REQ-020). 회의 마무리 이벤트를 아직 처리하지 않았으면 "준비 중" */
