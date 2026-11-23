@@ -10,7 +10,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Test ECR publish failure paths (offline)
-        run: python3 .github/scripts/test_publish_dev_ecr.py
+        run: |
+          python3 -m pip install --disable-pip-version-check --only-binary :all: coverage==7.10.6
+          python3 -m coverage run --branch --source=.github/scripts .github/scripts/test_publish_dev_ecr.py
+          python3 -m coverage xml -o python-coverage.xml
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -23,7 +26,7 @@ jobs:
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
       - name: SonarQube Cloud
         if: env.SONAR_TOKEN != ''
-        run: ./gradlew sonar --no-daemon --console=plain
+        run: ./gradlew sonar --no-daemon --console=plain -Dsonar.python.coverage.reportPaths=python-coverage.xml
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
