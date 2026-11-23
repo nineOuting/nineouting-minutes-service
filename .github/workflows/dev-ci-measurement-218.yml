@@ -1,0 +1,71 @@
+# Measurement only: pinned DEV source; no registry publishing, deployment or DEV cache writes.
+name: DEV CI current measurement 218
+'on':
+  pull_request:
+    branches:
+    - dev
+    paths:
+    - .github/workflows/dev-ci-measurement-218.yml
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: f4fc393aaaa8d2f1f7d40f0c6ff7948954639826
+        persist-credentials: false
+    - name: Test ECR publish failure paths (offline)
+      run: python3 .github/scripts/test_publish_dev_ecr.py
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+    - uses: gradle/actions/setup-gradle@v4
+      with:
+        cache-read-only: true
+    - name: Build
+      run: ./gradlew build jacocoTestReport --no-daemon --console=plain
+      env:
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    - name: SonarQube Cloud
+      if: env.SONAR_TOKEN != ''
+      run: ./gradlew sonar --no-daemon --console=plain
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+  image:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: f4fc393aaaa8d2f1f7d40f0c6ff7948954639826
+        persist-credentials: false
+    - uses: docker/setup-buildx-action@v3
+    - name: Build local image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: linux/amd64
+        tags: nineouting-verified:local
+        labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+        secrets: |
+          gpr_actor=${{ github.actor }}
+          gpr_token=${{ secrets.GPR_TOKEN }}
+        cache-from: type=gha
+        load: true
+        push: false
+    - name: Clean measurement image
+      if: always()
+      run: docker image rm nineouting-verified:local || true
+    timeout-minutes: 45
