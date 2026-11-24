@@ -121,16 +121,14 @@ public class MinutesService {
     }
 
     /**
-     * REQ-140 양식 변경 (REQ-100에서 이어짐). 작성자, 작성 중에만. 칸을 양식 항목대로 다시 만들고,
+     * REQ-140 양식 변경 (REQ-100에서 이어짐). 작성자만. 칸을 양식 항목대로 다시 만들고,
      * 제목이 같은 칸은 쓰던 내용을 옮긴다 (나머지는 비운다).
+     * 검토 중, 확정 뒤에도 바꿀 수 있다 (QA 63, 2026-11-24). 이때는 AI 다시 배치를 하지 않는다 (DraftService는 작성 중일 때만)
      */
     @Transactional
     public MinutesDetailResponse selectTemplate(Long minutesId, Long userId, Long templateId) {
         Minutes minutes = access.requireForUpdate(minutesId);
         access.requireWriter(minutes, userId);
-        if (!minutes.is(MinutesStatus.WRITING)) {
-            throw new BusinessException(MinutesErrorCode.MINUTES_NOT_WRITING);
-        }
         Template template = templateRepository.findById(templateId)
                 .filter(found -> templateService.isUsableIn(found, userId, minutes.getWorkspaceId()))
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
