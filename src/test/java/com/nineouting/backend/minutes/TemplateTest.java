@@ -37,14 +37,49 @@ class TemplateTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data.items[*].title", contains("할 일", "요약", "메모")));
         call(other, put("/api/minutes-templates/" + templateId), "{\"name\":\"남의 것\",\"items\":[{\"title\":\"x\"}]}")
                 .andExpect(status().isNotFound());
-        call(me, put("/api/minutes-templates/" + DEFAULT_TEMPLATE_ID), "{\"name\":\"기본\",\"items\":[{\"title\":\"x\"}]}")
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("TEMPLATE_NOT_EDITABLE"));
         call(me, post("/api/minutes-templates"), "{\"name\":\"\",\"items\":[]}")
                 .andExpect(status().isBadRequest());
 
         call(me, delete("/api/minutes-templates/" + templateId), null).andExpect(status().isOk());
         call(me, get("/api/minutes-templates"), null).andExpect(jsonPath("$.data.length()").value(1));
+    }
+
+    @Test
+    void 기본_양식을_고치면_내_기본_양식이_생기고_다른_사람의_기본_양식은_그대로다() throws Exception {
+        Long me = newId();
+        Long other = newId();
+        call(me, put("/api/minutes-templates/" + DEFAULT_TEMPLATE_ID + "/favorite"), null).andExpect(status().isOk());
+        Long mine = id(call(me, post("/api/minutes-templates"), "{\"name\":\"짧은 양식\",\"items\":[{\"title\":\"요약\"}]}"),
+                "$.data.templateId");
+
+        Long myDefault = id(call(me, put("/api/minutes-templates/" + DEFAULT_TEMPLATE_ID),
+                "{\"name\":\"내 기본\",\"items\":[{\"title\":\"메모\"}]}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isDefault").value(true))
+                .andExpect(jsonPath("$.data.favorite").value(true)), "$.data.templateId");
+
+        // 공용 기본 양식 자리를 내 기본 양식이 대신한다
+        call(me, get("/api/minutes-templates"), null)
+                .andExpect(jsonPath("$.data[*].templateId", contains(myDefault.intValue(), mine.intValue())))
+                .andExpect(jsonPath("$.data[0].isDefault").value(true))
+                .andExpect(jsonPath("$.data[0].items[*].title", contains("메모")));
+        call(other, get("/api/minutes-templates"), null)
+                .andExpect(jsonPath("$.data[*].templateId", contains((int) DEFAULT_TEMPLATE_ID)))
+                .andExpect(jsonPath("$.data[0].name").value("기본 양식"));
+
+        // 다시 고치면 같은 내 기본 양식을 고친다 (공용 기본 양식 번호로 보내도 같다)
+        call(me, put("/api/minutes-templates/" + DEFAULT_TEMPLATE_ID), "{\"name\":\"내 기본 2\",\"items\":[{\"title\":\"할 일\"}]}")
+                .andExpect(jsonPath("$.data.templateId").value(myDefault));
+        call(me, put("/api/minutes-templates/" + myDefault), "{\"name\":\"내 기본 3\",\"items\":[{\"title\":\"할 일\"}]}")
+                .andExpect(jsonPath("$.data.templateId").value(myDefault));
+        call(me, get("/api/minutes-templates"), null).andExpect(jsonPath("$.data.length()").value(2));
+
+        // 기본 양식은 지울 수 없다
+        call(me, delete("/api/minutes-templates/" + myDefault), null)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TEMPLATE_DEFAULT_NOT_DELETABLE"));
+        call(me, delete("/api/minutes-templates/" + DEFAULT_TEMPLATE_ID), null)
+                .andExpect(status().isForbidden());
     }
 
     @Test

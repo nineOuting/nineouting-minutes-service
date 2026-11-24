@@ -22,6 +22,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,6 +60,11 @@ public class TemplateService {
     @Transactional(readOnly = true)
     public List<TemplateResponse> list(Long userId) {
         List<Template> templates = new ArrayList<>(templateRepository.findUsableBy(userId));
+        // QA 64 내 기본 양식이 있으면 공용 기본 양식 자리를 대신한다
+        if (templates.stream().anyMatch(Template::isPersonalDefault)) {
+            templates.removeIf(Template::isDefault);
+            templates.sort(Comparator.comparing(template -> !template.isPersonalDefault()));
+        }
         Set<Long> listed = templates.stream().map(Template::getId).collect(Collectors.toSet());
         List<Long> sharedIds = shareRepository.findByWorkspaceIdIn(workspaceIdsOf(userId)).stream()
                 .map(TemplateWorkspaceShare::getTemplateId)
@@ -104,7 +110,8 @@ public class TemplateService {
 
     @Transactional
     public TemplateResponse update(Long templateId, Long userId, TemplateRequest request) {
-        Template template = requireOwn(templateId, userId);
+        Template template = editable(templateId, userId);
+        templateId = template.getId();
         template.change(request.name(), request.description(), settings.write(layoutToSave(request.layout())));
         itemRepository.deleteByTemplateId(templateId);
         LocalDateTime now = LocalDateTime.now(clock);
@@ -116,6 +123,9 @@ public class TemplateService {
     @Transactional
     public void delete(Long templateId, Long userId) {
         Template template = requireOwn(templateId, userId);
+        if (template.isPersonalDefault()) {
+            throw new BusinessException(MinutesErrorCode.TEMPLATE_DEFAULT_NOT_DELETABLE);
+        }
         shareRepository.deleteByTemplateId(templateId);
         itemRepository.deleteByTemplateId(templateId);
         templateRepository.delete(template);
@@ -210,7 +220,28 @@ public class TemplateService {
                 .collect(Collectors.toSet());
     }
 
-    /** 다른 사람의 양식은 없는 것처럼(404), 기본 양식은 고칠 수 없다(403) */
+    /**
+     * 고칠 양식. 공용 기본 양식을 고치면 내 기본 양식을 고친다 (QA 64). 아직 없으면 그때 만들고,
+     * 공용 기본 양식에 해 둔 즐겨찾기도 옮긴다
+     */
+    private Template editable(Long templateId, Long userId) {
+        Template template = templateRepository.findById(templateId)
+                .filter(found -> found.isUsableBy(userId))
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+        if (!template.isDefault()) {
+            return template;
+        }
+        return templateRepository.findByOwnerUserIdAndPersonalDefaultTrue(userId).orElseGet(() -> {
+            Template mine = templateRepository.save(Template.personalDefault(userId, template.getName(),
+                    template.getDescription(), template.getLayout()));
+            if (favoriteRepository.existsByTemplateIdAndUserId(template.getId(), userId)) {
+                favoriteRepository.save(new TemplateFavorite(mine.getId(), userId, LocalDateTime.now(clock)));
+            }
+            return mine;
+        });
+    }
+
+    /** 다른 사람의 양식은 없는 것처럼(404), 공용 기본 양식은 고칠 수 없다(403) */
     private Template requireOwn(Long templateId, Long userId) {
         Template template = templateRepository.findById(templateId)
                 .filter(found -> found.isUsableBy(userId))
@@ -237,7 +268,8 @@ public class TemplateService {
 
     private TemplateResponse response(Template template, List<TemplateItem> items, boolean favorite,
                                       LocalDateTime updatedAt) {
-        return new TemplateResponse(template.getId(), template.getName(), template.getDescription(), template.isDefault(),
+        return new TemplateResponse(template.getId(), template.getName(), template.getDescription(),
+                template.isDefault() || template.isPersonalDefault(),
                 items.stream()
                         .map(item -> new TemplateResponse.TemplateItemResponse(item.getTitle(), item.getDescription(),
                                 settings.read(item.getSettings())))
