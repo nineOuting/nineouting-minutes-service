@@ -11,11 +11,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jayway.jsonpath.JsonPath;
 import com.nineouting.backend.minutes.client.TemplateImportClient;
 import com.nineouting.backend.minutes.client.TemplateImportClient.Result;
+import com.nineouting.backend.minutes.domain.TemplateImport;
+import com.nineouting.backend.minutes.repository.TemplateImportRepository;
 import com.nineouting.backend.minutes.service.BackgroundStorage;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -42,6 +45,9 @@ class TemplateImportTest extends ApiTestSupport {
 
     @Autowired
     private BackgroundStorage storage;
+
+    @Autowired
+    private TemplateImportRepository importRepository;
 
     @Test
     void 접수하면_뒤에서_AI가_읽고_새_개인_양식으로_저장하며_파일은_지운다() throws Exception {
@@ -111,6 +117,18 @@ class TemplateImportTest extends ApiTestSupport {
                 .willReturn(new Result(Result.Status.FAILED, null, "no_text"));
         Integer importId = start(me, upload(me, "application/pdf"), "양식");
         call(newId(), get("/api/minutes-templates/import/" + importId), null).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void 처리하던_서버가_꺼져_오래_PENDING이면_조회할_때_실패로_바꾼다() throws Exception {
+        Long me = newId();
+        TemplateImport stale = importRepository.save(new TemplateImport(me, "template-imports/" + me + "/gone.pdf", "양식",
+                LocalDateTime.now().minusMinutes(10)));
+
+        call(me, get("/api/minutes-templates/import/" + stale.getId()), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("FAILED"))
+                .andExpect(jsonPath("$.data.code").value("TEMPLATE_IMPORT_UNAVAILABLE"));
     }
 
     private void expectFailure(Long me, Result result, String code) throws Exception {
