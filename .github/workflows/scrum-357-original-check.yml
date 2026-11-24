@@ -1,0 +1,73 @@
+# Original CI only: pinned original application source and original tests.
+# No registry publishing, AWS authentication, GitOps or deployment.
+name: SCRUM-357 original CI recheck
+'on':
+  pull_request:
+    branches:
+    - dev
+    paths:
+    - .github/workflows/scrum-357-original-check.yml
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: 4f23f0067229f80fe88e5eb3e1800350af6821e3
+        persist-credentials: false
+    - name: Test ECR publish failure paths (offline)
+      run: |
+        python3 -m pip install --disable-pip-version-check --only-binary :all: coverage==7.10.6
+        python3 -m coverage run --branch --source=.github/scripts .github/scripts/test_publish_dev_ecr.py
+        python3 -m coverage xml -o python-coverage.xml
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+    - uses: gradle/actions/setup-gradle@v4
+    - name: Build
+      run: ./gradlew build jacocoTestReport --no-daemon --console=plain
+      env:
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    - name: SonarQube Cloud
+      if: env.SONAR_TOKEN != ''
+      run: ./gradlew sonar --no-daemon --console=plain -Dsonar.python.coverage.reportPaths=python-coverage.xml
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+  image:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: 4f23f0067229f80fe88e5eb3e1800350af6821e3
+        persist-credentials: false
+    - uses: docker/setup-buildx-action@v3
+    - name: Build local image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: linux/amd64
+        tags: nineouting-verified:local
+        labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+        secrets: |
+          gpr_actor=${{ github.actor }}
+          gpr_token=${{ secrets.GPR_TOKEN }}
+        cache-from: type=gha
+        load: true
+        push: false
+    - name: Remove recheck image
+      if: always()
+      run: docker image rm nineouting-verified:local || true
+    timeout-minutes: 30
