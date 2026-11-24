@@ -5,8 +5,13 @@ import com.nineouting.backend.common.security.web.CurrentUser;
 import com.nineouting.backend.common.web.response.ApiResponse;
 import com.nineouting.backend.minutes.dto.BackgroundUploadRequest;
 import com.nineouting.backend.minutes.dto.BackgroundUploadResponse;
+import com.nineouting.backend.minutes.dto.TemplateImportRequest;
+import com.nineouting.backend.minutes.dto.TemplateImportStatusResponse;
+import com.nineouting.backend.minutes.dto.TemplateImportUploadRequest;
+import com.nineouting.backend.minutes.dto.TemplateImportUploadResponse;
 import com.nineouting.backend.minutes.dto.TemplateRequest;
 import com.nineouting.backend.minutes.dto.TemplateResponse;
+import com.nineouting.backend.minutes.service.TemplateImportService;
 import com.nineouting.backend.minutes.service.TemplateService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -29,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TemplateController {
 
     private final TemplateService templateService;
+    private final TemplateImportService templateImportService;
 
     @GetMapping
     public ApiResponse<List<TemplateResponse>> list(@CurrentUser AuthenticatedUser user) {
@@ -46,6 +52,31 @@ public class TemplateController {
     public ApiResponse<BackgroundUploadResponse> backgroundUploadUrl(@CurrentUser AuthenticatedUser user,
                                                                     @Valid @RequestBody BackgroundUploadRequest request) {
         return ApiResponse.ok(templateService.backgroundUploadUrl(user.userId(), request));
+    }
+
+    /** REQ-195 양식 가져오기: 파일(PDF, Word) 업로드 주소 */
+    @PostMapping("/import-upload-url")
+    public ApiResponse<TemplateImportUploadResponse> importUploadUrl(@CurrentUser AuthenticatedUser user,
+                                                                     @Valid @RequestBody TemplateImportUploadRequest request) {
+        return ApiResponse.ok(templateImportService.uploadUrl(user.userId(), request));
+    }
+
+    /**
+     * REQ-195 양식 가져오기 접수: 올린 파일을 뒤에서 AI로 읽어 새 개인 양식으로 저장한다 (최대 약 2분).
+     * 바로 202와 importId로 답하고, 화면은 GET /import/{importId}로 결과를 묻는다
+     */
+    @PostMapping("/import")
+    public ResponseEntity<ApiResponse<TemplateImportStatusResponse>> importTemplate(@CurrentUser AuthenticatedUser user,
+                                                                                    @Valid @RequestBody TemplateImportRequest request) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.ok(templateImportService.start(user.userId(), request)));
+    }
+
+    /** REQ-195 양식 가져오기 진행 상태 (PENDING, SUCCEEDED + templateId, FAILED + code, message) */
+    @GetMapping("/import/{importId}")
+    public ApiResponse<TemplateImportStatusResponse> importStatus(@CurrentUser AuthenticatedUser user,
+                                                                  @PathVariable Long importId) {
+        return ApiResponse.ok(templateImportService.status(user.userId(), importId));
     }
 
     @PutMapping("/{templateId}")
