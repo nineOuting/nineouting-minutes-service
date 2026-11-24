@@ -1,0 +1,364 @@
+# Three arms, same application SHA. First run primes cache; subsequent runs are measured.
+# No registry publishing, AWS authentication, GitOps or deployment.
+name: SCRUM-357 CI comparison
+'on':
+  pull_request:
+    branches:
+    - dev
+    paths:
+    - .github/workflows/scrum-357-comparison.yml
+permissions:
+  contents: read
+jobs:
+  build-before:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: 4f23f0067229f80fe88e5eb3e1800350af6821e3
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Enable identical timing diagnostics
+      run: |
+        cat > .ci-measure.init.gradle <<'GRADLE'
+        import java.time.Instant
+        gradle.projectsEvaluated {
+            allprojects {
+                tasks.configureEach { t ->
+                    t.doFirst { println("MEASURE_TASK_START " + t.path + " " + Instant.now()) }
+                    t.doLast { println("MEASURE_TASK_END " + t.path + " " + Instant.now()) }
+                }
+                tasks.withType(Test).configureEach {
+                    testLogging { showStandardStreams = true; events "started", "passed", "skipped", "failed" }
+                    beforeTest { d -> println("MEASURE_TEST_START " + d.className + "#" + d.name + " " + Instant.now()) }
+                    afterTest { d,r -> println("MEASURE_TEST_END " + d.className + "#" + d.name + " " + r.startTime + " " + r.endTime + " " + r.resultType) }
+                }
+            }
+        }
+        GRADLE
+    - name: Test ECR publish failure paths (offline)
+      run: |
+        python3 -m pip install --disable-pip-version-check --only-binary :all: coverage==7.10.6
+        python3 -m coverage run --branch --source=.github/scripts .github/scripts/test_publish_dev_ecr.py
+        python3 -m coverage xml -o python-coverage.xml
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+    - uses: gradle/actions/setup-gradle@v4
+      with:
+        cache-disabled: true
+        cache-read-only: false
+    - name: Build
+      run: ./gradlew build jacocoTestReport --init-script .ci-measure.init.gradle --no-daemon --console=plain
+      env:
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    - name: SonarQube Cloud
+      if: env.SONAR_TOKEN != ''
+      run: ./gradlew sonar --init-script .ci-measure.init.gradle --no-daemon --console=plain -Dsonar.python.coverage.reportPaths=python-coverage.xml
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    - name: Save test timing and startup evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: timing-before-${{ github.run_attempt }}
+        path: |-
+          build/test-results/
+          build/reports/tests/
+          build/reports/jacoco/
+        retention-days: 7
+        if-no-files-found: warn
+    timeout-minutes: 30
+  image-before:
+    needs: build-before
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: 4f23f0067229f80fe88e5eb3e1800350af6821e3
+        persist-credentials: false
+    - uses: docker/setup-buildx-action@v3
+    - name: Build local image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: linux/amd64
+        tags: nineouting-verified:local
+        labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+        load: true
+        push: false
+        secrets: |-
+          gpr_actor=${{ github.actor }}
+          gpr_token=${{ secrets.GPR_TOKEN }}
+    - name: Remove measurement image
+      if: always()
+      run: docker image rm nineouting-verified:local || true
+    timeout-minutes: 30
+  build-jar:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Enable identical timing diagnostics
+      run: |
+        cat > .ci-measure.init.gradle <<'GRADLE'
+        import java.time.Instant
+        gradle.projectsEvaluated {
+            allprojects {
+                tasks.configureEach { t ->
+                    t.doFirst { println("MEASURE_TASK_START " + t.path + " " + Instant.now()) }
+                    t.doLast { println("MEASURE_TASK_END " + t.path + " " + Instant.now()) }
+                }
+                tasks.withType(Test).configureEach {
+                    testLogging { showStandardStreams = true; events "started", "passed", "skipped", "failed" }
+                    beforeTest { d -> println("MEASURE_TEST_START " + d.className + "#" + d.name + " " + Instant.now()) }
+                    afterTest { d,r -> println("MEASURE_TEST_END " + d.className + "#" + d.name + " " + r.startTime + " " + r.endTime + " " + r.resultType) }
+                }
+            }
+        }
+        GRADLE
+    - name: Test ECR publish failure paths (offline)
+      run: |
+        python3 -m pip install --disable-pip-version-check --only-binary :all: coverage==7.10.6
+        python3 -m coverage run --branch --source=.github/scripts .github/scripts/test_publish_dev_ecr.py
+        python3 -m coverage xml -o python-coverage.xml
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+    - uses: gradle/actions/setup-gradle@v4
+      with:
+        cache-disabled: true
+        cache-read-only: false
+    - name: Build
+      run: ./gradlew build jacocoTestReport --init-script .ci-measure.init.gradle --no-daemon --console=plain
+      env:
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    - name: SonarQube Cloud
+      if: env.SONAR_TOKEN != ''
+      run: ./gradlew sonar --init-script .ci-measure.init.gradle --no-daemon --console=plain -Dsonar.python.coverage.reportPaths=python-coverage.xml
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    - name: Prepare tested application
+      shell: bash
+      run: |
+        set -euo pipefail
+        jars=(build/libs/*.jar)
+        if [[ ${#jars[@]} -ne 1 || ! -s "${jars[0]}" ]]; then
+          echo '::error::Expected one nonempty executable JAR from the successful build'
+          exit 1
+        fi
+        mkdir -p tested-application
+        cp "${jars[0]}" tested-application/app.jar
+        (cd tested-application && sha256sum app.jar > app.jar.sha256)
+    - name: Save tested application
+      uses: actions/upload-artifact@v4
+      with:
+        name: jar-tested-minutes-${{ github.run_id }}-${{ github.sha }}
+        path: |
+          tested-application/app.jar
+          tested-application/app.jar.sha256
+        if-no-files-found: error
+        overwrite: true
+        retention-days: 1
+    - name: Save test timing and startup evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: timing-jar-${{ github.run_attempt }}
+        path: |-
+          build/test-results/
+          build/reports/tests/
+          build/reports/jacoco/
+        retention-days: 7
+        if-no-files-found: warn
+    timeout-minutes: 30
+  image-jar:
+    needs: build-jar
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        persist-credentials: false
+    - name: Download tested application
+      uses: actions/download-artifact@v4
+      with:
+        name: jar-tested-minutes-${{ github.run_id }}-${{ github.sha }}
+        path: tested-application
+    - name: Check tested application
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd tested-application
+        test -s app.jar
+        sha256sum --check app.jar.sha256
+    - uses: docker/setup-buildx-action@v3
+    - name: Build local image
+      uses: docker/build-push-action@v6
+      with:
+        context: tested-application
+        file: Dockerfile.ci
+        platforms: linux/amd64
+        tags: nineouting-verified:local
+        labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+        load: true
+        push: false
+    - name: Verify image contains the tested JAR
+      shell: bash
+      run: |
+        set -euo pipefail
+        container=$(docker create nineouting-verified:local)
+        trap 'docker rm "$container" >/dev/null' EXIT
+        docker cp "$container:/app/app.jar" image-app.jar
+        cmp tested-application/app.jar image-app.jar
+        docker image inspect nineouting-verified:local --format '{{.Os}}/{{.Architecture}} user={{.Config.User}} command={{json .Config.Entrypoint}}'
+    - name: Remove measurement image
+      if: always()
+      run: docker image rm nineouting-verified:local || true
+    timeout-minutes: 30
+  build-cache:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Enable identical timing diagnostics
+      run: |
+        cat > .ci-measure.init.gradle <<'GRADLE'
+        import java.time.Instant
+        gradle.projectsEvaluated {
+            allprojects {
+                tasks.configureEach { t ->
+                    t.doFirst { println("MEASURE_TASK_START " + t.path + " " + Instant.now()) }
+                    t.doLast { println("MEASURE_TASK_END " + t.path + " " + Instant.now()) }
+                }
+                tasks.withType(Test).configureEach {
+                    testLogging { showStandardStreams = true; events "started", "passed", "skipped", "failed" }
+                    beforeTest { d -> println("MEASURE_TEST_START " + d.className + "#" + d.name + " " + Instant.now()) }
+                    afterTest { d,r -> println("MEASURE_TEST_END " + d.className + "#" + d.name + " " + r.startTime + " " + r.endTime + " " + r.resultType) }
+                }
+            }
+        }
+        GRADLE
+    - name: Test ECR publish failure paths (offline)
+      run: |
+        python3 -m pip install --disable-pip-version-check --only-binary :all: coverage==7.10.6
+        python3 -m coverage run --branch --source=.github/scripts .github/scripts/test_publish_dev_ecr.py
+        python3 -m coverage xml -o python-coverage.xml
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+    - uses: gradle/actions/setup-gradle@v4
+      with:
+        cache-disabled: false
+        cache-read-only: false
+    - name: Build
+      run: ./gradlew build jacocoTestReport --init-script .ci-measure.init.gradle --no-daemon --console=plain
+      env:
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    - name: SonarQube Cloud
+      if: env.SONAR_TOKEN != ''
+      run: ./gradlew sonar --init-script .ci-measure.init.gradle --no-daemon --console=plain -Dsonar.python.coverage.reportPaths=python-coverage.xml
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+    - name: Prepare tested application
+      shell: bash
+      run: |
+        set -euo pipefail
+        jars=(build/libs/*.jar)
+        if [[ ${#jars[@]} -ne 1 || ! -s "${jars[0]}" ]]; then
+          echo '::error::Expected one nonempty executable JAR from the successful build'
+          exit 1
+        fi
+        mkdir -p tested-application
+        cp "${jars[0]}" tested-application/app.jar
+        (cd tested-application && sha256sum app.jar > app.jar.sha256)
+    - name: Save tested application
+      uses: actions/upload-artifact@v4
+      with:
+        name: cache-tested-minutes-${{ github.run_id }}-${{ github.sha }}
+        path: |
+          tested-application/app.jar
+          tested-application/app.jar.sha256
+        if-no-files-found: error
+        overwrite: true
+        retention-days: 1
+    - name: Save test timing and startup evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: timing-cache-${{ github.run_attempt }}
+        path: |-
+          build/test-results/
+          build/reports/tests/
+          build/reports/jacoco/
+        retention-days: 7
+        if-no-files-found: warn
+    timeout-minutes: 30
+  image-cache:
+    needs: build-cache
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        persist-credentials: false
+    - name: Download tested application
+      uses: actions/download-artifact@v4
+      with:
+        name: cache-tested-minutes-${{ github.run_id }}-${{ github.sha }}
+        path: tested-application
+    - name: Check tested application
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd tested-application
+        test -s app.jar
+        sha256sum --check app.jar.sha256
+    - uses: docker/setup-buildx-action@v3
+    - name: Build local image
+      uses: docker/build-push-action@v6
+      with:
+        context: tested-application
+        file: Dockerfile.ci
+        platforms: linux/amd64
+        tags: nineouting-verified:local
+        labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+        load: true
+        push: false
+    - name: Verify image contains the tested JAR
+      shell: bash
+      run: |
+        set -euo pipefail
+        container=$(docker create nineouting-verified:local)
+        trap 'docker rm "$container" >/dev/null' EXIT
+        docker cp "$container:/app/app.jar" image-app.jar
+        cmp tested-application/app.jar image-app.jar
+        docker image inspect nineouting-verified:local --format '{{.Os}}/{{.Architecture}} user={{.Config.User}} command={{json .Config.Entrypoint}}'
+    - name: Remove measurement image
+      if: always()
+      run: docker image rm nineouting-verified:local || true
+    timeout-minutes: 30
