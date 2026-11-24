@@ -116,16 +116,19 @@ class MinutesEditTest extends ApiTestSupport {
     }
 
     @Test
-    void 검토_중에는_양식을_바꿀_수_없다() throws Exception {
+    void 공유한_뒤에도_작성자는_양식을_바꿀_수_있다() throws Exception {
         Long minutesId = finishMeeting(newId(), folderId, "회의", START, writer, writer, attendee);
         writeContent(minutesId, writer, "내용");
         call(writer, post("/api/minutes/" + minutesId + "/review-request"), null).andExpect(status().isOk());
 
+        // QA 63 검토 중, 확정 뒤에도 바꾼다. 상태는 그대로다
         call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":1}")
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("MINUTES_NOT_WRITING"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REVIEWING"));
+        call(attendee, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":1}")
+                .andExpect(jsonPath("$.code").value("NOT_MINUTES_WRITER"));
         call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":999999}")
-                .andExpect(status().isConflict());
+                .andExpect(status().isNotFound());
     }
 
 
