@@ -22,6 +22,7 @@ public enum MinutesErrorCode implements ErrorCode {
     MINUTES_ALREADY_CONFIRMED(HttpStatus.CONFLICT, "이미 확정된 회의록입니다"),
     MINUTES_VERSION_CONFLICT(HttpStatus.CONFLICT, "다른 곳에서 먼저 저장했습니다. 새로고침 후 다시 저장해 주세요"),
     TEMPLATE_NOT_EDITABLE(HttpStatus.FORBIDDEN, "기본 양식은 고칠 수 없습니다"),
+    TEMPLATE_DEFAULT_NOT_DELETABLE(HttpStatus.FORBIDDEN, "기본 양식은 삭제할 수 없습니다"),
     TEMPLATE_BACKGROUND_INVALID(HttpStatus.BAD_REQUEST, "배경 사진은 5MB 이하의 PNG, JPEG, WebP만 올릴 수 있습니다"),
     TEMPLATE_BACKGROUND_NOT_UPLOADED(HttpStatus.CONFLICT, "배경 사진이 아직 올라가지 않았습니다. 다시 올려 주세요"),
     // REQ-195 양식 가져오기. 문구는 임시 (2026-11-24, 기획에서 정하는 중)

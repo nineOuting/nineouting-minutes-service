@@ -12,7 +12,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 회의록 양식 (REQ-119~121). ownerUserId가 없으면 기본 양식(누구나 고를 수 있고 고칠 수 없음).
+ * 회의록 양식 (REQ-119~121). ownerUserId가 없으면 공용 기본 양식(누구나 고를 수 있고 고칠 수 없음).
+ * personalDefault는 공용 기본 양식을 고쳐 만든 내 기본 양식 (QA 64). 내 목록에서 공용 기본 양식 자리를 대신한다
  */
 @Getter
 @Entity
@@ -37,11 +38,21 @@ public class Template extends BaseTimeEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String layout;
 
+    @Column(name = "personal_default", nullable = false)
+    private boolean personalDefault;
+
     public Template(Long ownerUserId, String name, String description, String layout) {
         this.ownerUserId = ownerUserId;
         this.name = name;
         this.description = description;
         this.layout = layout;
+    }
+
+    /** 공용 기본 양식을 처음 고칠 때 만드는 내 기본 양식 */
+    public static Template personalDefault(Long ownerUserId, String name, String description, String layout) {
+        Template template = new Template(ownerUserId, name, description, layout);
+        template.personalDefault = true;
+        return template;
     }
 
     public boolean isDefault() {
