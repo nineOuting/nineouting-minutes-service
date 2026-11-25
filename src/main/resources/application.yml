@@ -1,7 +1,12 @@
 server:
   port: ${SERVER_PORT:8084}
+  # 파드가 내려갈 때 새 요청은 받지 않고 하던 요청은 마치고 끝낸다 (2026-11-25 부하 시험, 파드 축소 때 502, 504)
+  shutdown: graceful
 
 spring:
+  lifecycle:
+    # 쿠버네티스가 강제로 끝내기(30초)보다 먼저 끝낸다
+    timeout-per-shutdown-phase: 20s
   application:
     name: minutes-service
   config:
