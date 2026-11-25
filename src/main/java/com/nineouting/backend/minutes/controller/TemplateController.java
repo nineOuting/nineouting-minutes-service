@@ -11,6 +11,7 @@ import com.nineouting.backend.minutes.dto.TemplateImportUploadRequest;
 import com.nineouting.backend.minutes.dto.TemplateImportUploadResponse;
 import com.nineouting.backend.minutes.dto.TemplateRequest;
 import com.nineouting.backend.minutes.dto.TemplateResponse;
+import com.nineouting.backend.minutes.dto.WorkspaceDefaultTemplateRequest;
 import com.nineouting.backend.minutes.service.TemplateImportService;
 import com.nineouting.backend.minutes.service.TemplateService;
 import jakarta.validation.Valid;
@@ -114,6 +115,13 @@ public class TemplateController {
     }
 
     /** REQ-199 기본 양식에서 빼면 공유도 거둔다 */
+    /** REQ-213 워크스페이스 기본 양식 정하기 (워크스페이스 소유자). 고른 양식을 워크스페이스 사본으로 만들고 그 사본을 돌려준다 */
+    @PutMapping("/workspaces/{workspaceId}/default")
+    public ApiResponse<TemplateResponse> setWorkspaceDefault(@CurrentUser AuthenticatedUser user, @PathVariable Long workspaceId,
+                                                            @Valid @RequestBody WorkspaceDefaultTemplateRequest request) {
+        return ApiResponse.ok(templateService.setWorkspaceDefault(workspaceId, user.userId(), request.templateId()));
+    }
+
     @DeleteMapping("/{templateId}/workspace-shares/{workspaceId}")
     public ApiResponse<Void> unshare(@CurrentUser AuthenticatedUser user, @PathVariable Long templateId,
                                      @PathVariable Long workspaceId) {

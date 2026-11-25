@@ -4,6 +4,7 @@ import com.nineouting.backend.common.client.AccessibleFolder;
 import com.nineouting.backend.common.client.WorkspaceClient;
 import com.nineouting.backend.common.web.error.BusinessException;
 import com.nineouting.backend.common.web.error.CommonErrorCode;
+import com.nineouting.backend.minutes.client.WorkspaceDefaultTemplateClient;
 import com.nineouting.backend.minutes.domain.Template;
 import com.nineouting.backend.minutes.domain.TemplateFavorite;
 import com.nineouting.backend.minutes.domain.TemplateItem;
@@ -55,9 +56,10 @@ public class TemplateService {
     private final TemplateFavoriteRepository favoriteRepository;
     private final TemplateWorkspaceShareRepository shareRepository;
     private final WorkspaceClient workspaceClient;
+    private final WorkspaceDefaultTemplateClient workspaceDefaultTemplateClient;
     private final Clock clock;
 
-    /** 기본 양식이 먼저, 그다음 내 양식, 그다음 내 워크스페이스에 공유된 양식 (REQ-199) */
+    /** 기본 양식이 먼저, 그다음 내 양식, 그다음 내 워크스페이스에 공유된 양식 (REQ-199), 워크스페이스 양식함 사본 (REQ-213) */
     // 다른 서비스 응답을 기다리는 동안 DB 연결을 잡고 있지 않는다. 조회마다 짧은 읽기 트랜잭션을 쓴다
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<TemplateResponse> list(Long userId) {
@@ -68,12 +70,19 @@ public class TemplateService {
             templates.sort(Comparator.comparing(template -> !template.isPersonalDefault()));
         }
         Set<Long> listed = templates.stream().map(Template::getId).collect(Collectors.toSet());
-        List<Long> sharedIds = shareRepository.findByWorkspaceIdIn(workspaceIdsOf(userId)).stream()
+        Set<Long> workspaceIds = workspaceIdsOf(userId);
+        List<Long> sharedIds = new ArrayList<>(shareRepository.findByWorkspaceIdIn(workspaceIds).stream()
                 .map(TemplateWorkspaceShare::getTemplateId)
                 .filter(id -> !listed.contains(id))
                 .distinct()
-                .toList();
+                .toList());
         templates.addAll(templateRepository.findAllById(sharedIds));
+        // REQ-213 워크스페이스마다 마지막 사본(지금 기본 양식)만. 예전 사본은 그 양식을 골라 둔 회의가 쓰도록 남겨 둔다
+        Map<Long, Template> latestCopies = new LinkedHashMap<>();
+        templateRepository.findByWorkspaceIdInOrderById(workspaceIds)
+                .forEach(copy -> latestCopies.put(copy.getWorkspaceId(), copy));
+        latestCopies.values().forEach(copy -> sharedIds.add(copy.getId()));
+        templates.addAll(latestCopies.values());
         Map<Long, List<TemplateItem>> items = itemRepository.findByTemplateIdInOrderByPosition(
                         templates.stream().map(Template::getId).toList()).stream()
                 .collect(Collectors.groupingBy(TemplateItem::getTemplateId));
@@ -193,10 +202,37 @@ public class TemplateService {
         }
     }
 
-    /** 이 워크스페이스의 회의록에 이 양식을 쓸 수 있는지: 기본 양식, 내 양식, 이 워크스페이스에 공유된 양식 */
+    /**
+     * REQ-213 워크스페이스 기본 양식 정하기: 고른 양식(공용 기본, 내 양식)을 워크스페이스 사본으로 만들고 그 사본을 기본 양식으로 정한다.
+     * 소유자 확인은 workspace-service가 한다 (아니면 403이고 사본도 되돌린다). 이미 이 워크스페이스 사본이면 다시 복사하지 않는다
+     */
+    @Transactional
+    public TemplateResponse setWorkspaceDefault(Long workspaceId, Long userId, Long templateId) {
+        Set<Long> workspaceIds = workspaceIdsOf(userId);
+        if (!workspaceIds.contains(workspaceId)) {
+            throw new BusinessException(CommonErrorCode.FORBIDDEN);
+        }
+        Template source = templateRepository.findById(templateId)
+                .filter(found -> isUsable(found, userId, workspaceIds))
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+        Template copy = workspaceId.equals(source.getWorkspaceId()) ? source
+                : templateRepository.save(Template.workspaceCopy(workspaceId, source));
+        List<TemplateItem> items = itemRepository.findByTemplateIdInOrderByPosition(List.of(source.getId()));
+        if (copy != source) {
+            items = items.stream()
+                    .map(item -> itemRepository.save(new TemplateItem(copy.getId(), item.getPosition(), item.getTitle(),
+                            item.getDescription(), item.getSettings())))
+                    .toList();
+        }
+        workspaceDefaultTemplateClient.change(workspaceId, userId, copy.getId());
+        return response(copy, items, favoriteRepository.existsByTemplateIdAndUserId(copy.getId(), userId)).asShared();
+    }
+
+    /** 이 워크스페이스의 회의록에 이 양식을 쓸 수 있는지: 기본 양식, 내 양식, 이 워크스페이스에 공유된 양식, 이 워크스페이스 양식함 사본 */
     @Transactional(readOnly = true)
     public boolean isUsableIn(Template template, Long userId, Long workspaceId) {
         return template.isUsableBy(userId)
+                || (workspaceId != null && workspaceId.equals(template.getWorkspaceId()))
                 || (workspaceId != null && shareRepository.existsByTemplateIdAndWorkspaceId(template.getId(), workspaceId));
     }
 
@@ -212,7 +248,9 @@ public class TemplateService {
     }
 
     private boolean isUsable(Template template, Long userId, Set<Long> workspaceIds) {
-        return template.isUsableBy(userId) || shareRepository.findByWorkspaceIdIn(workspaceIds).stream()
+        return template.isUsableBy(userId)
+                || (template.isWorkspaceTemplate() && workspaceIds.contains(template.getWorkspaceId()))
+                || shareRepository.findByWorkspaceIdIn(workspaceIds).stream()
                 .anyMatch(share -> share.getTemplateId().equals(template.getId()));
     }
 
@@ -276,6 +314,6 @@ public class TemplateService {
                         .map(item -> new TemplateResponse.TemplateItemResponse(item.getTitle(), item.getDescription(),
                                 settings.read(item.getSettings())))
                         .toList(),
-                layoutToShow(template.getLayout()), favorite, updatedAt, false);
+                layoutToShow(template.getLayout()), favorite, updatedAt, false, template.getWorkspaceId());
     }
 }
