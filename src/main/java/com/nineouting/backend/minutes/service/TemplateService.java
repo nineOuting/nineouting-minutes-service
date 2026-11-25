@@ -30,6 +30,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -57,7 +58,8 @@ public class TemplateService {
     private final Clock clock;
 
     /** 기본 양식이 먼저, 그다음 내 양식, 그다음 내 워크스페이스에 공유된 양식 (REQ-199) */
-    @Transactional(readOnly = true)
+    // 다른 서비스 응답을 기다리는 동안 DB 연결을 잡고 있지 않는다. 조회마다 짧은 읽기 트랜잭션을 쓴다
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<TemplateResponse> list(Long userId) {
         List<Template> templates = new ArrayList<>(templateRepository.findUsableBy(userId));
         // QA 64 내 기본 양식이 있으면 공용 기본 양식 자리를 대신한다
