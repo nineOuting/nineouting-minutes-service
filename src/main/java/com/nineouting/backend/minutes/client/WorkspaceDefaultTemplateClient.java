@@ -4,6 +4,7 @@ import com.nineouting.backend.common.client.ClientProperties;
 import com.nineouting.backend.common.web.error.BusinessException;
 import com.nineouting.backend.common.web.error.CommonErrorCode;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -20,11 +21,21 @@ public class WorkspaceDefaultTemplateClient {
 
     private final RestClient restClient;
 
+    @Autowired
     public WorkspaceDefaultTemplateClient(RestClient.Builder builder, ClientProperties properties) {
+        this(restClient(builder, properties));
+    }
+
+    /** 시험에서 가짜 서버에 묶은 RestClient를 넣는다 */
+    WorkspaceDefaultTemplateClient(RestClient restClient) {
+        this.restClient = restClient;
+    }
+
+    private static RestClient restClient(RestClient.Builder builder, ClientProperties properties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(properties.connectTimeout());
         requestFactory.setReadTimeout(properties.readTimeout());
-        this.restClient = builder.clone().requestFactory(requestFactory).baseUrl(properties.workspaceServiceUrl()).build();
+        return builder.clone().requestFactory(requestFactory).baseUrl(properties.workspaceServiceUrl()).build();
     }
 
     public void change(Long workspaceId, Long userId, Long templateId) {
