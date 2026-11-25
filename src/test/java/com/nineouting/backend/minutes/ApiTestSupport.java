@@ -13,6 +13,7 @@ import com.nineouting.backend.common.client.FolderAccess;
 import com.nineouting.backend.common.client.UserClient;
 import com.nineouting.backend.common.client.UserSummary;
 import com.nineouting.backend.common.client.WorkspaceClient;
+import com.nineouting.backend.minutes.client.WorkspaceDefaultTemplateClient;
 import com.nineouting.backend.common.event.meeting.MeetingFinished;
 import com.nineouting.backend.common.outbox.OutboxEventRepository;
 import com.nineouting.backend.common.web.error.BusinessException;
@@ -74,6 +75,10 @@ public abstract class ApiTestSupport {
 
     @MockitoBean
     protected WorkspaceClient workspaceClient;
+
+    /** REQ-213 기본 양식 지정 (workspace-service 소유자 확인). 기본은 통과, 시험마다 막을 수 있다 */
+    @MockitoBean
+    protected WorkspaceDefaultTemplateClient workspaceDefaultTemplateClient;
 
     @BeforeEach
     void fakeOtherServices() {
