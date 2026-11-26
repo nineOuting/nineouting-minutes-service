@@ -387,7 +387,12 @@ public class DraftService {
             field.put("description", item == null ? "" : item.getDescription());
             field.put("type", table ? "table" : "text");
             if (table) {
-                field.put("columns", Math.clamp(settings.path("table").path("cols").asInt(1), 1, 8)); // 양식 편집 화면, AI 서버와 같은 상한 8 (2026-11-24)
+                int columns = Math.clamp(settings.path("table").path("cols").asInt(1), 1, TemplateSettings.MAX_TABLE_COLUMNS);
+                field.put("columns", columns);
+                List<String> names = columnNames(settings.path("table").path("columnNames"), columns);
+                if (names != null) {
+                    names.forEach(field.putArray("columnNames")::add);
+                }
             }
             field.put("aiFill", aiFill);
             if (!aiFill) {
@@ -395,6 +400,27 @@ public class DraftService {
             }
         }
         return fields;
+    }
+
+    /**
+     * 사용자가 정한 표 열 이름 (settings.table.columnNames, 회의록 초안 명세 5.8). 자리 순서가 뜻이라 열 수와 같은 길이로 맞추고
+     * (넘치면 자르고 모자라면 빈 글), 빈 자리는 AI가 정한다. AI 서버가 거절(400)할 이름(30자 초과, |·줄바꿈, 같은 표 안에서 겹침)은
+     * 비워서 보낸다. 하나라도 거절되면 초안 전체가 실패하기 때문이다. 정한 이름이 없으면 null (보내지 않는다)
+     */
+    static List<String> columnNames(JsonNode saved, int columns) {
+        if (!saved.isArray()) {
+            return null;
+        }
+        List<String> names = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (int index = 0; index < columns; index++) {
+            JsonNode node = saved.path(index);
+            String name = node.isString() ? node.asString("").strip() : "";
+            boolean usable = name.codePointCount(0, name.length()) <= TemplateSettings.MAX_COLUMN_NAME
+                    && name.chars().noneMatch(c -> c == '|' || c == '\n' || c == '\r');
+            names.add(usable && !name.isEmpty() && seen.add(name) ? name : "");
+        }
+        return seen.isEmpty() ? null : names;
     }
 
     private Set<String> tableTitles(Long templateId) {

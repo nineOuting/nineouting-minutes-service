@@ -205,6 +205,41 @@ class DraftTest extends ApiTestSupport {
     }
 
     @Test
+    void 표_열_수는_10까지_그대로_보내고_넘으면_10으로_자른다() throws Exception {
+        String body = """
+                {"name":"넓은 표 양식","items":[{"title":"일정표","settings":{"recordType":"TABLE","table":{"cols":10}}},
+                 {"title":"너무 넓은 표","settings":{"recordType":"TABLE","table":{"cols":12}}}]}""";
+        Long templateId = id(call(writer, post("/api/minutes-templates"), body), "$.data.templateId");
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
+                .andExpect(status().isOk());
+
+        String request = awaitDraftRequest();
+        assertThat(JsonPath.<List<Integer>>read(request, "$.template.fields[*].columns")).containsExactly(10, 10);
+    }
+
+    @Test
+    void 사용자가_정한_표_열_이름을_자리_순서대로_보내고_AI가_거절할_이름은_비운다() throws Exception {
+        String tooLong = "가".repeat(31);
+        String body = """
+                {"name":"열 이름 양식","items":[
+                 {"title":"일부만 정함","settings":{"recordType":"TABLE","table":{"cols":4,"columnNames":["안건",""," 담당 ",""]}}},
+                 {"title":"고쳐서 보냄","settings":{"recordType":"TABLE","table":{"cols":5,"columnNames":["가|나","결정"," 결정 ","%s"]}}},
+                 {"title":"이름 없음","settings":{"recordType":"TABLE","table":{"cols":2}}},
+                 {"title":"모두 빈 이름","settings":{"recordType":"TABLE","table":{"cols":2,"columnNames":[" ","",null]}}}]}"""
+                .formatted(tooLong);
+        Long templateId = id(call(writer, post("/api/minutes-templates"), body), "$.data.templateId");
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
+                .andExpect(status().isOk());
+
+        String request = awaitDraftRequest();
+        assertThat(JsonPath.<List<String>>read(request, "$.template.fields[0].columnNames")).containsExactly("안건", "", "담당", "");
+        // | 가 든 이름, 겹치는 이름, 30자를 넘는 이름은 비우고, 모자란 자리는 빈 글로 채운다
+        assertThat(JsonPath.<List<String>>read(request, "$.template.fields[1].columnNames")).containsExactly("", "결정", "", "", "");
+        // 정한 이름이 없으면 보내지 않는다
+        assertThat(JsonPath.<List<Object>>read(request, "$.template.fields[*].columnNames")).hasSize(2);
+    }
+
+    @Test
     void ai_service에_초안_기능이_없으면_입력_오류가_아니라_쓸_수_없음으로_답한다() throws Exception {
         DRAFT_ENABLED.set(false);
         call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")

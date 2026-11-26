@@ -65,8 +65,8 @@ class TemplateImportTest extends ApiTestSupport {
         String base = "$.data[?(@.templateId == %d)]".formatted(templateId);
         assertThat(JsonPath.<java.util.List<Object>>read(templates, base + ".items[*].settings.recordType"))
                 .containsExactly("FREE", "LIST", "CHECKLIST", "TABLE");
-        // 표 열은 양식 편집 화면 상한 8로 자른다
-        assertThat(JsonPath.<java.util.List<Object>>read(templates, base + ".items[3].settings.table.cols")).containsExactly(8);
+        // 표 열은 양식 편집 화면 상한 10으로 자른다
+        assertThat(JsonPath.<java.util.List<Object>>read(templates, base + ".items[3].settings.table.cols")).containsExactly(10);
         assertThat(JsonPath.<java.util.List<Object>>read(templates, base + ".items[0].description"))
                 .containsExactly("※ 안건별로 적는다");
         assertThat(JsonPath.<java.util.List<Object>>read(templates, base + ".layout.header.text")).containsExactly("나인아웃팅 회의록");
