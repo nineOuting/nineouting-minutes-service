@@ -92,7 +92,8 @@ class ExportTest extends ApiTestSupport {
     void 양식_설정을_따른_PDF를_만든다() throws Exception {
         Long writer = newId();
         String body = """
-                {"name":"표 양식","items":[{"title":"안건표","settings":{"recordType":"TABLE","table":{"cols":2,"border":"BOLD"}}},
+                {"name":"표 양식","items":[{"title":"안건표","settings":{"recordType":"TABLE","table":{"cols":2,"border":"HORIZONTAL"}}},
+                 {"title":"안건표 2","settings":{"recordType":"TABLE","table":{"cols":3,"border":"OUTER"}}},
                  {"title":"할 일","settings":{"recordType":"CHECKLIST","titleSize":18,"color":"#27187d"}}],
                  "layout":{"pageNumber":true,"align":"CENTER","marginVerticalMm":30,
                            "header":{"enabled":true,"text":"SYNC"},"footer":{"enabled":true,"text":"사내용"}}}""";

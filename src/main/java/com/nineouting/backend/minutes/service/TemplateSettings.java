@@ -14,7 +14,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 양식의 화면 표시 설정 (Figma 23-2 회의록 양식 편집). 서버는 JSON 그대로 저장하고, 회의록 PDF를 만들 때 일부를 읽는다.
  * <ul>
  *   <li>항목 settings: recordType(FREE / LIST / CHECKLIST / TABLE), titleSize·bodySize(px), color(#rrggbb), margin(px),
- *       table{rows, cols, autoWidth, align(LEFT / CENTER / RIGHT), border(BASIC / NONE / BOLD), headerColor,
+ *       table{rows, cols, autoWidth, align(LEFT / CENTER / RIGHT), border(BASIC / HORIZONTAL / OUTER / NONE), headerColor,
  *       columnNames(열 자리 순서대로 문자열, 비운 열은 "". 사용자가 정한 열 이름, AI 초안 요청에 보낸다)}</li>
  *   <li>layout: showMeetingInfo, sectionGap(px), marginVerticalMm·marginHorizontalMm, align(LEFT / CENTER / RIGHT),
  *       pageNumber, header{enabled, text}, footer{enabled, text}</li>
