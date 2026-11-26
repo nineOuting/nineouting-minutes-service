@@ -14,7 +14,8 @@ import tools.jackson.databind.json.JsonMapper;
  * 양식의 화면 표시 설정 (Figma 23-2 회의록 양식 편집). 서버는 JSON 그대로 저장하고, 회의록 PDF를 만들 때 일부를 읽는다.
  * <ul>
  *   <li>항목 settings: recordType(FREE / LIST / CHECKLIST / TABLE), titleSize·bodySize(px), color(#rrggbb), margin(px),
- *       table{rows, cols, autoWidth, align(LEFT / CENTER / RIGHT), border(BASIC / NONE / BOLD), headerColor}</li>
+ *       table{rows, cols, autoWidth, align(LEFT / CENTER / RIGHT), border(BASIC / NONE / BOLD), headerColor,
+ *       columnNames(열 자리 순서대로 문자열, 비운 열은 "". 사용자가 정한 열 이름, AI 초안 요청에 보낸다)}</li>
  *   <li>layout: showMeetingInfo, sectionGap(px), marginVerticalMm·marginHorizontalMm, align(LEFT / CENTER / RIGHT),
  *       pageNumber, header{enabled, text}, footer{enabled, text}</li>
  * </ul>
@@ -28,6 +29,9 @@ public class TemplateSettings {
      * AI 초안 요청과 양식 가져오기에서 이 값으로 자른다. ai-service 계약(회의록 초안 5.8 columns)도 같은 상한을 받아야 한다
      */
     public static final int MAX_TABLE_COLUMNS = 10;
+
+    /** 표 열 이름 하나의 길이 상한. ai-service 계약(회의록 초안 5.8 columnNames)과 같다 */
+    public static final int MAX_COLUMN_NAME = 30;
 
     /** 설정 하나가 이보다 길면 거절한다 */
     private static final int MAX_JSON_LENGTH = 4000;
