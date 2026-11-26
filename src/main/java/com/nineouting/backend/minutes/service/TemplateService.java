@@ -31,8 +31,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 회의록 양식 관리 (REQ-119~121). 개인 양식 + 기본 양식 1개 (8장 결정 5).
@@ -56,12 +56,13 @@ public class TemplateService {
     private final TemplateFavoriteRepository favoriteRepository;
     private final TemplateWorkspaceShareRepository shareRepository;
     private final WorkspaceClient workspaceClient;
+    private final TransactionTemplate transactionTemplate;
     private final WorkspaceDefaultTemplateClient workspaceDefaultTemplateClient;
     private final Clock clock;
 
     /** 기본 양식이 먼저, 그다음 내 양식, 그다음 내 워크스페이스에 공유된 양식 (REQ-199), 워크스페이스 양식함 사본 (REQ-213) */
-    // 다른 서비스 응답을 기다리는 동안 DB 연결을 잡고 있지 않는다. 조회마다 짧은 읽기 트랜잭션을 쓴다
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    // 트랜잭션을 두지 않는다. 조회마다 연결을 잡았다 바로 돌려줘서, 다른 서비스를 기다리는 동안 연결을 쥐지 않는다
+    // (NOT_SUPPORTED는 첫 조회의 연결을 메서드 끝까지 쥔다. 2026-11-26 부하 시험, RemoteCallConnectionTest)
     public List<TemplateResponse> list(Long userId) {
         List<Template> templates = new ArrayList<>(templateRepository.findUsableBy(userId));
         // QA 64 내 기본 양식이 있으면 공용 기본 양식 자리를 대신한다
@@ -99,17 +100,20 @@ public class TemplateService {
     }
 
     /** REQ-123 양식 즐겨찾기 등록·해제. 기본 양식도 된다. 여러 번 해도 결과가 같다 */
-    @Transactional
+    // 다른 서비스(workspace)를 먼저 부르고, DB를 바꾸는 부분만 짧은 트랜잭션으로 (2026-11-26 부하 시험)
     public void favorite(Long templateId, Long userId, boolean favorite) {
-        templateRepository.findById(templateId)
-                .filter(found -> isUsable(found, userId, workspaceIdsOf(userId)))
-                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
-        boolean exists = favoriteRepository.existsByTemplateIdAndUserId(templateId, userId);
-        if (favorite && !exists) {
-            favoriteRepository.save(new TemplateFavorite(templateId, userId, LocalDateTime.now(clock)));
-        } else if (!favorite && exists) {
-            favoriteRepository.deleteByTemplateIdAndUserId(templateId, userId);
-        }
+        Set<Long> workspaceIds = workspaceIdsOf(userId);
+        transactionTemplate.executeWithoutResult(status -> {
+            templateRepository.findById(templateId)
+                    .filter(found -> isUsable(found, userId, workspaceIds))
+                    .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+            boolean exists = favoriteRepository.existsByTemplateIdAndUserId(templateId, userId);
+            if (favorite && !exists) {
+                favoriteRepository.save(new TemplateFavorite(templateId, userId, LocalDateTime.now(clock)));
+            } else if (!favorite && exists) {
+                favoriteRepository.deleteByTemplateIdAndUserId(templateId, userId);
+            }
+        });
     }
 
     @Transactional

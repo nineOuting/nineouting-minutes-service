@@ -42,7 +42,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -101,8 +100,8 @@ public class ArchiveService {
      * REQ-053~055. 워크스페이스에서 내가 들어갈 수 있는 모든 폴더의 회의록. 장소는 고른 것 중 하나와 같고,
      * 참석자는 고른 사람 중 한 명이라도 참석했으면 보인다. 들어갈 수 있는 폴더가 없으면 빈 목록
      */
-    // 다른 서비스 응답을 기다리는 동안 DB 연결을 잡고 있지 않는다. 조회마다 짧은 읽기 트랜잭션을 쓴다
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    // 트랜잭션을 두지 않는다. 조회마다 연결을 잡았다 바로 돌려줘서, 다른 서비스를 기다리는 동안 연결을 쥐지 않는다
+    // (NOT_SUPPORTED는 첫 조회의 연결을 메서드 끝까지 쥔다. 2026-11-26 부하 시험, RemoteCallConnectionTest)
     public WorkspaceArchivePageResponse workspaceMinutes(Long workspaceId, Long userId, String query, LocalDate from,
                                                          LocalDate to, List<String> locations, List<Long> attendeeIds,
                                                          ArchiveSort sort, Long folderId, int page, int size) {
@@ -199,7 +198,8 @@ public class ArchiveService {
     }
 
     /** REQ-149~150. 내가 작성자인 작성 중 회의록, 회의 날짜가 오래된 순. 들어갈 수 없게 된 폴더의 회의록은 뺀다 */
-    @Transactional(readOnly = true)
+    // 트랜잭션을 두지 않는다. 조회마다 연결을 잡았다 바로 돌려줘서, 다른 서비스를 기다리는 동안 연결을 쥐지 않는다
+    // (NOT_SUPPORTED는 첫 조회의 연결을 메서드 끝까지 쥔다. 2026-11-26 부하 시험, RemoteCallConnectionTest)
     public List<WritingMinutesResponse> writing(Long userId) {
         List<Minutes> writing = minutesRepository.findByWriterUserIdAndStatusAndTrashedAtIsNullOrderByMeetingStartAtAscIdAsc(userId,
                 MinutesStatus.WRITING);
