@@ -1,0 +1,13 @@
+# CI runtime image: use the JAR already built and tested by Gradle.
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+RUN addgroup -S app && adduser -S -G app -H app
+COPY tested-application/app.jar app.jar
+
+USER app
+EXPOSE 8084
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=10 \
+    CMD wget -q --spider http://localhost:8084/actuator/health || exit 1
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
