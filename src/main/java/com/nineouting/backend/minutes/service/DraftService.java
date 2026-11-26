@@ -387,7 +387,7 @@ public class DraftService {
             field.put("description", item == null ? "" : item.getDescription());
             field.put("type", table ? "table" : "text");
             if (table) {
-                field.put("columns", Math.clamp(settings.path("table").path("cols").asInt(1), 1, 8)); // 양식 편집 화면, AI 서버와 같은 상한 8 (2026-11-24)
+                field.put("columns", Math.clamp(settings.path("table").path("cols").asInt(1), 1, TemplateSettings.MAX_TABLE_COLUMNS));
             }
             field.put("aiFill", aiFill);
             if (!aiFill) {

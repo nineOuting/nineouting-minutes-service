@@ -45,8 +45,6 @@ public class TemplateImportService {
     private static final int MAX_NAME = 50;
     private static final int MAX_TITLE = 100;
     private static final int MAX_DESCRIPTION = 200;
-    /** 양식 편집 화면, AI 서버와 같은 표 열 상한 */
-    private static final int MAX_COLUMNS = 8;
     private static final Map<String, String> RECORD_TYPES = Map.of(
             "free", "FREE", "list", "LIST", "checklist", "CHECKLIST", "table", "TABLE");
 
@@ -147,7 +145,7 @@ public class TemplateImportService {
             Map<String, Object> settings = new LinkedHashMap<>();
             settings.put("recordType", recordType);
             if ("TABLE".equals(recordType)) {
-                settings.put("table", Map.of("cols", Math.clamp(field.path("columns").asInt(1), 1, MAX_COLUMNS)));
+                settings.put("table", Map.of("cols", Math.clamp(field.path("columns").asInt(1), 1, TemplateSettings.MAX_TABLE_COLUMNS)));
             }
             items.add(new TemplateItemRequest(cut(title, MAX_TITLE),
                     cut(field.path("description").asString(""), MAX_DESCRIPTION), settings));

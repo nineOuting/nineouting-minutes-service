@@ -23,6 +23,12 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 public class TemplateSettings {
 
+    /**
+     * 표 항목의 열 수 상한 (디자인 09 "열 수 고르기" 1~10열, REQ-156, SCRUM-419).
+     * AI 초안 요청과 양식 가져오기에서 이 값으로 자른다. ai-service 계약(회의록 초안 5.8 columns)도 같은 상한을 받아야 한다
+     */
+    public static final int MAX_TABLE_COLUMNS = 10;
+
     /** 설정 하나가 이보다 길면 거절한다 */
     private static final int MAX_JSON_LENGTH = 4000;
     private static final TypeReference<LinkedHashMap<String, Object>> MAP = new TypeReference<>() {

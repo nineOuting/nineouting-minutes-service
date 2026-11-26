@@ -205,6 +205,19 @@ class DraftTest extends ApiTestSupport {
     }
 
     @Test
+    void 표_열_수는_10까지_그대로_보내고_넘으면_10으로_자른다() throws Exception {
+        String body = """
+                {"name":"넓은 표 양식","items":[{"title":"일정표","settings":{"recordType":"TABLE","table":{"cols":10}}},
+                 {"title":"너무 넓은 표","settings":{"recordType":"TABLE","table":{"cols":12}}}]}""";
+        Long templateId = id(call(writer, post("/api/minutes-templates"), body), "$.data.templateId");
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
+                .andExpect(status().isOk());
+
+        String request = awaitDraftRequest();
+        assertThat(JsonPath.<List<Integer>>read(request, "$.template.fields[*].columns")).containsExactly(10, 10);
+    }
+
+    @Test
     void ai_service에_초안_기능이_없으면_입력_오류가_아니라_쓸_수_없음으로_답한다() throws Exception {
         DRAFT_ENABLED.set(false);
         call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")
