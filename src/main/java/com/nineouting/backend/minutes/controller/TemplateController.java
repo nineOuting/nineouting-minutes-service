@@ -55,7 +55,7 @@ public class TemplateController {
         return ApiResponse.ok(templateService.backgroundUploadUrl(user.userId(), request));
     }
 
-    /** REQ-195 양식 가져오기: 파일(PDF, Word) 업로드 주소 */
+    /** REQ-195 양식 가져오기: 파일(PDF, Word, Excel, 텍스트) 업로드 주소 */
     @PostMapping("/import-upload-url")
     public ApiResponse<TemplateImportUploadResponse> importUploadUrl(@CurrentUser AuthenticatedUser user,
                                                                      @Valid @RequestBody TemplateImportUploadRequest request) {

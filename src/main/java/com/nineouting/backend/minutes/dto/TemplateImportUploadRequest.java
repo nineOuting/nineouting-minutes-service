@@ -3,7 +3,7 @@ package com.nineouting.backend.minutes.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 
-/** REQ-195 양식 가져오기 파일 업로드 주소 요청 (PDF, Word(docx), 20MB 이하) */
+/** REQ-195 양식 가져오기 파일 업로드 주소 요청 (PDF, Word(docx), Excel(xlsx), 텍스트(txt, md, csv), 20MB 이하) */
 public record TemplateImportUploadRequest(
         @NotBlank(message = "파일 형식이 없습니다")
         String contentType,
