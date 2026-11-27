@@ -24,13 +24,6 @@ jobs:
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
-      - name: SonarQube Cloud
-        if: env.SONAR_TOKEN != ''
-        run: ./gradlew sonar --no-daemon --console=plain -Dsonar.python.coverage.reportPaths=python-coverage.xml
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
       - name: Package tested JAR
         run: |
           set -euo pipefail

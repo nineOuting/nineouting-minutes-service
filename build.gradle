@@ -3,7 +3,6 @@ plugins {
     id 'org.springframework.boot' version '4.1.0'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
-    id 'org.sonarqube' version '7.6.0.18749'
 }
 
 group = 'com.nineouting.backend'
@@ -88,7 +87,7 @@ tasks.named('jar') {
     enabled = false
 }
 
-// 테스트 커버리지 (SonarQube Cloud에 올린다)
+// 테스트 커버리지 보고서 (build/reports/jacoco)
 tasks.named('jacocoTestReport') {
     dependsOn tasks.named('test')
     reports {
@@ -96,14 +95,3 @@ tasks.named('jacocoTestReport') {
     }
 }
 
-// SonarQube Cloud 품질 분석. CI에서 SONAR_TOKEN이 있을 때만 돈다
-sonar {
-    properties {
-        property 'sonar.organization', 'nineouting'
-        property 'sonar.projectKey', 'nineOuting_nineouting-minutes-service'
-        property 'sonar.host.url', 'https://sonarcloud.io'
-        // CI 검증 파일도 시험 코드로 분석한다. 기존 Java 시험 범위는 유지한다.
-        properties['sonar.tests'] += file('.github/scripts/test_publish_dev_ecr.py')
-        property 'sonar.exclusions', '.github/scripts/test_publish_dev_ecr.py'
-    }
-}
