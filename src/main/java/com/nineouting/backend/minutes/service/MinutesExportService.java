@@ -258,8 +258,8 @@ public class MinutesExportService {
                 PdfPCell cell = new PdfPCell(new Phrase(text, body));
                 cell.setHorizontalAlignment(align(settings.text("align", "LEFT")));
                 cell.setPadding(4f);
-                cell.setBorder("NONE".equals(border) ? Rectangle.NO_BORDER : Rectangle.BOX);
-                cell.setBorderWidth("BOLD".equals(border) ? 1.5f : 0.5f);
+                cell.setBorder(cellBorder(border, r, c, rows.size(), cols));
+                cell.setBorderWidth(0.5f);
                 cell.setBorderColor(Color.LIGHT_GRAY);
                 if (r == 0) {
                     cell.setBackgroundColor(header);
@@ -268,6 +268,23 @@ public class MinutesExportService {
             }
         }
         return table;
+    }
+
+    /**
+     * 표 칸 하나에 그릴 변 (디자인 09 "테두리 고르기", REQ-156, SCRUM-419).
+     * BASIC 은 네 변, HORIZONTAL 은 위·아래(표 맨 위·맨 아래 선 포함), OUTER 는 표 바깥쪽 변, NONE 은 없음.
+     * 모르는 값은 BASIC 으로 그린다
+     */
+    static int cellBorder(String border, int row, int col, int rows, int cols) {
+        return switch (border) {
+            case "NONE" -> Rectangle.NO_BORDER;
+            case "HORIZONTAL" -> Rectangle.TOP | Rectangle.BOTTOM;
+            case "OUTER" -> (row == 0 ? Rectangle.TOP : 0)
+                    | (row == rows - 1 ? Rectangle.BOTTOM : 0)
+                    | (col == 0 ? Rectangle.LEFT : 0)
+                    | (col == cols - 1 ? Rectangle.RIGHT : 0);
+            default -> Rectangle.BOX;
+        };
     }
 
     /** 머릿글·바닥글·쪽 번호 */
