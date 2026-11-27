@@ -85,6 +85,16 @@ public class DraftService {
     public void request(Long minutesId, Long userId) {
         Minutes minutes = access.requireForUpdate(minutesId);
         access.requireWriter(minutes, userId);
+        request(minutes);
+    }
+
+    /** REQ-217. 관리자가 실패한 초안을 다시 요청한다. 작성자가 다시 요청한 것과 같다 */
+    @Transactional
+    public void requestByAdmin(Long minutesId) {
+        request(access.requireForUpdate(minutesId));
+    }
+
+    private void request(Minutes minutes) {
         if (!minutes.is(MinutesStatus.WRITING)) {
             throw new BusinessException(MinutesErrorCode.MINUTES_NOT_WRITING);
         }

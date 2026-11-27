@@ -100,6 +100,20 @@ public class MinutesRagSync {
                         body.path("errorCode").asString(null))));
     }
 
+    /**
+     * REQ-217. 관리자가 실패한 회의록을 처음부터 다시 보낸다 (다음 보내기 차례에 나간다).
+     * 실패한 회의록이 아니면 false (없음, 쓰레기통, 이미 보내는 중, 끝남)
+     */
+    public boolean retryByAdmin(Long minutesId) {
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> minutesRepository.findByIdForUpdate(minutesId)
+                .filter(minutes -> !minutes.isTrashed() && minutes.getRagStatus() == RagStatus.FAILED)
+                .map(minutes -> {
+                    minutes.ragPending();
+                    return true;
+                })
+                .orElse(false)));
+    }
+
     /** 영구 삭제한 회의록을 검색용 저장소에서도 지운다 (지운 트랜잭션이 끝난 뒤). 실패해도 삭제를 막지 않는다 */
     public void deleteQuietly(Collection<Long> minutesIds) {
         if (!draftProperties.enabled() || minutesIds.isEmpty()) {
