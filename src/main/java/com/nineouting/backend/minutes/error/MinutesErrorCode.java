@@ -26,9 +26,9 @@ public enum MinutesErrorCode implements ErrorCode {
     TEMPLATE_BACKGROUND_INVALID(HttpStatus.BAD_REQUEST, "배경 사진은 5MB 이하의 PNG, JPEG, WebP만 올릴 수 있습니다"),
     TEMPLATE_BACKGROUND_NOT_UPLOADED(HttpStatus.CONFLICT, "배경 사진이 아직 올라가지 않았습니다. 다시 올려 주세요"),
     // REQ-195 양식 가져오기. 문구는 임시 (2026-11-24, 기획에서 정하는 중)
-    TEMPLATE_IMPORT_INVALID(HttpStatus.BAD_REQUEST, "PDF나 Word 파일만 20MB까지 올릴 수 있어요"),
+    TEMPLATE_IMPORT_INVALID(HttpStatus.BAD_REQUEST, "PDF, Word, Excel, 텍스트 파일만 20MB까지 올릴 수 있어요"),
     TEMPLATE_IMPORT_NOT_UPLOADED(HttpStatus.CONFLICT, "파일이 아직 올라가지 않았어요. 다시 올려 주세요"),
-    TEMPLATE_IMPORT_UNSUPPORTED(HttpStatus.UNPROCESSABLE_CONTENT, "PDF나 Word 파일만 가져올 수 있어요"),
+    TEMPLATE_IMPORT_UNSUPPORTED(HttpStatus.UNPROCESSABLE_CONTENT, "PDF, Word, Excel, 텍스트 파일만 가져올 수 있어요"),
     TEMPLATE_IMPORT_ENCRYPTED(HttpStatus.UNPROCESSABLE_CONTENT, "암호가 걸린 파일은 가져올 수 없어요"),
     TEMPLATE_IMPORT_TOO_LARGE(HttpStatus.UNPROCESSABLE_CONTENT, "20MB, 10쪽까지만 가져올 수 있어요"),
     TEMPLATE_IMPORT_NO_TEXT(HttpStatus.UNPROCESSABLE_CONTENT, "글자를 읽을 수 없는 파일이에요 (스캔한 PDF 등)"),

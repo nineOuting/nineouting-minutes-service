@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.RejectedExecutionException;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +28,7 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
 /**
- * REQ-195 양식 가져오기. 브라우저가 template-imports/{사용자}/ 아래에 PDF나 Word 파일을 올리면, 접수만 바로 하고
+ * REQ-195 양식 가져오기. 브라우저가 template-imports/{사용자}/ 아래에 PDF, Word, Excel, 텍스트(txt, md, csv) 파일을 올리면, 접수만 바로 하고
  * 뒤에서 서명 주소로 ai-service에 읽기를 맡긴다(최대 약 2분, CloudFront 30초 한도 때문에 나눈다). 읽은 항목, 머리말,
  * 꼬리말로 새 개인 양식을 저장하고, 화면은 상태를 다시 묻는다. 올린 파일은 끝나면 지운다.
  * 진짜 형식은 ai-service가 파일 내용으로 판단한다 (여기서는 브라우저가 알려 준 형식과 크기만 본다)
@@ -39,9 +38,14 @@ import tools.jackson.databind.JsonNode;
 public class TemplateImportService {
 
     private static final String PREFIX = "template-imports/";
-    private static final String PDF = "application/pdf";
-    private static final String DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    private static final Set<String> TYPES = Set.of(PDF, DOCX);
+    /** 받는 형식 → 저장 키 확장자. 확장자는 보기용이고, 진짜 형식은 ai-service가 파일 내용으로 판단한다 */
+    private static final Map<String, String> EXTENSIONS = Map.of(
+            "application/pdf", ".pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx",
+            "text/plain", ".txt",
+            "text/markdown", ".md",
+            "text/csv", ".csv");
     private static final int MAX_NAME = 50;
     private static final int MAX_TITLE = 100;
     private static final int MAX_DESCRIPTION = 200;
@@ -69,10 +73,10 @@ public class TemplateImportService {
     }
 
     public TemplateImportUploadResponse uploadUrl(Long userId, TemplateImportUploadRequest request) {
-        if (!TYPES.contains(request.contentType()) || request.size() > properties.maxFileBytes()) {
+        if (!EXTENSIONS.containsKey(request.contentType()) || request.size() > properties.maxFileBytes()) {
             throw new BusinessException(MinutesErrorCode.TEMPLATE_IMPORT_INVALID);
         }
-        String key = PREFIX + userId + "/" + UUID.randomUUID() + (PDF.equals(request.contentType()) ? ".pdf" : ".docx");
+        String key = PREFIX + userId + "/" + UUID.randomUUID() + EXTENSIONS.get(request.contentType());
         return new TemplateImportUploadResponse(key, storage.uploadUrl(key, request.contentType()), request.contentType());
     }
 

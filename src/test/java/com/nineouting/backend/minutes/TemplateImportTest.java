@@ -87,7 +87,7 @@ class TemplateImportTest extends ApiTestSupport {
     }
 
     @Test
-    void PDF_Word가_아니거나_20MB를_넘거나_남의_파일이거나_아직_안_올렸으면_거절한다() throws Exception {
+    void 받지_않는_형식이거나_20MB를_넘거나_남의_파일이거나_아직_안_올렸으면_거절한다() throws Exception {
         Long me = newId();
         call(me, post("/api/minutes-templates/import-upload-url"), "{\"contentType\":\"image/png\",\"size\":10}")
                 .andExpect(status().isBadRequest())
@@ -108,6 +108,24 @@ class TemplateImportTest extends ApiTestSupport {
         call(me, post("/api/minutes-templates/import"), "{\"fileKey\":\"%s\",\"name\":\"양식\"}".formatted(docx))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("TEMPLATE_IMPORT_NOT_UPLOADED"));
+    }
+
+    @Test
+    void Excel과_텍스트_형식도_업로드_주소를_받고_형식별_확장자가_붙는다() throws Exception {
+        Long me = newId();
+        java.util.Map<String, String> types = java.util.Map.of(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx",
+                "text/plain", ".txt",
+                "text/markdown", ".md",
+                "text/csv", ".csv");
+        for (var type : types.entrySet()) {
+            String key = data(call(me, post("/api/minutes-templates/import-upload-url"),
+                    "{\"contentType\":\"%s\",\"size\":10}".formatted(type.getKey()))
+                    .andExpect(status().isOk()), "$.data.fileKey");
+            assertThat(key).startsWith("template-imports/" + me + "/").endsWith(type.getValue());
+        }
+        // 서명에 Content-Type이 들어가므로 텍스트 형식으로도 실제로 올라가는지 본다
+        assertThat(upload(me, "text/csv")).endsWith(".csv");
     }
 
     @Test
