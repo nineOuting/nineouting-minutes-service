@@ -140,11 +140,12 @@ class DraftTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data.draftStatus").value("FAILED"))
                 .andExpect(jsonPath("$.data.draftError").value("LLM_TIMEOUT"));
 
-        int before = DRAFT_REQUESTS.size();
+        int before = draftRequestCountForThisMinutes();
         call(newId(), post("/api/minutes/" + minutesId + "/draft"), null).andExpect(status().isForbidden());
         call(writer, post("/api/minutes/" + minutesId + "/draft"), null)
                 .andExpect(jsonPath("$.data.draftStatus").value("REQUESTED"));
-        assertThat(DRAFT_REQUESTS).hasSize(before + 1);
+        awaitDraftRequestCount(before + 1);
+        assertThat(draftRequestCountForThisMinutes()).isEqualTo(before + 1);
     }
 
     @Test
@@ -398,6 +399,23 @@ class DraftTest extends ApiTestSupport {
             Thread.sleep(100);
         }
         throw new AssertionError("ai-service가 초안 요청을 받지 못했습니다");
+    }
+
+    /** 다른 테스트의 비동기 요청을 세지 않도록 현재 회의록의 요청만 센다. */
+    private int draftRequestCountForThisMinutes() {
+        return (int) DRAFT_REQUESTS.stream()
+                .filter(body -> JsonPath.<Number>read(body, "$.minutesId").longValue() == minutesId)
+                .count();
+    }
+
+    private void awaitDraftRequestCount(int expected) throws InterruptedException {
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        while (System.nanoTime() < deadline) {
+            if (draftRequestCountForThisMinutes() >= expected) return;
+            Thread.sleep(100);
+        }
+        throw new AssertionError("초안 요청 수가 " + expected + "개가 되지 않았습니다 (지금 "
+                + draftRequestCountForThisMinutes() + "개)");
     }
 
     private static void handle(HttpExchange exchange) throws IOException {
