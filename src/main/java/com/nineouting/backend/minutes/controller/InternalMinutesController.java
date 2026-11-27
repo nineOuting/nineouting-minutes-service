@@ -1,5 +1,7 @@
 package com.nineouting.backend.minutes.controller;
 
+import com.nineouting.backend.common.web.error.BusinessException;
+import com.nineouting.backend.common.web.error.CommonErrorCode;
 import com.nineouting.backend.minutes.service.DraftService;
 import com.nineouting.backend.minutes.service.MinutesRagSync;
 import java.util.List;
@@ -32,6 +34,22 @@ public class InternalMinutesController {
     @PostMapping("/internal/rag/ingest-result")
     public ResponseEntity<Void> receiveIngestResult(@RequestBody JsonNode body) {
         minutesRagSync.receiveResult(body);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** admin-service → 실패한 AI 초안 다시 요청 (REQ-217). 작성자가 다시 요청할 때와 같은 오류를 낸다 */
+    @PostMapping("/internal/admin/minutes/{minutesId}/draft-retry")
+    public ResponseEntity<Void> retryDraft(@PathVariable Long minutesId) {
+        draftService.requestByAdmin(minutesId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** admin-service → 실패한 회의록을 검색용 저장소에 다시 보낸다 (REQ-217). 실패한 회의록이 아니면 404 */
+    @PostMapping("/internal/admin/minutes/{minutesId}/rag-retry")
+    public ResponseEntity<Void> retryRag(@PathVariable Long minutesId) {
+        if (!minutesRagSync.retryByAdmin(minutesId)) {
+            throw new BusinessException(CommonErrorCode.NOT_FOUND);
+        }
         return ResponseEntity.noContent().build();
     }
 

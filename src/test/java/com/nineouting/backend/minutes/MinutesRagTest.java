@@ -134,6 +134,24 @@ class MinutesRagTest extends ApiTestSupport {
     }
 
     @Test
+    void 관리자가_실패한_회의록을_다시_보내면_처음부터_다시_보낸다() throws Exception {
+        Long writer = newId();
+        Long folderId = folder(newId(), "기획", writer);
+        Long minutesId = confirmed(folderId, writer, START);
+        minutesRagSync.run();
+        // 보내는 중이면 다시 보내지 않는다
+        mockMvc.perform(post("/internal/admin/minutes/" + minutesId + "/rag-retry")).andExpect(status().isNotFound());
+        transactionTemplate.executeWithoutResult(status -> minutesRepository.findById(minutesId).orElseThrow()
+                .ragFailed("rejected"));
+
+        int before = ingests(minutesId).size();
+        mockMvc.perform(post("/internal/admin/minutes/" + minutesId + "/rag-retry")).andExpect(status().isNoContent());
+        assertThat(minutesRepository.findById(minutesId).orElseThrow().getRagStatus()).isEqualTo(RagStatus.PENDING);
+        minutesRagSync.run();
+        assertThat(ingests(minutesId)).hasSize(before + 1);
+    }
+
+    @Test
     void 챗봇이_찾을_회의록은_그_폴더의_작성_완료_회의록만_최근_회의부터_준다() throws Exception {
         Long writer = newId();
         Long folderId = folder(newId(), "기획", writer);

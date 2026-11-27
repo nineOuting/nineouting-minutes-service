@@ -148,6 +148,25 @@ class DraftTest extends ApiTestSupport {
     }
 
     @Test
+    void 관리자가_실패한_초안을_다시_요청하면_작성자가_요청한_것과_같다() throws Exception {
+        call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")
+                .andExpect(status().isOk());
+        String requestId = JsonPath.read(awaitDraftRequest(), "$.requestId");
+        mockMvc.perform(post("/internal/admin/minutes/" + minutesId + "/draft-retry"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DRAFT_IN_PROGRESS"));
+        callback("{\"requestId\":\"%s\",\"status\":\"FAILED\",\"error\":{\"code\":\"LLM_TIMEOUT\",\"message\":\"시간 초과\"}}"
+                .formatted(requestId));
+
+        int before = DRAFT_REQUESTS.size();
+        mockMvc.perform(post("/internal/admin/minutes/" + minutesId + "/draft-retry")).andExpect(status().isNoContent());
+        call(writer, get("/api/minutes/" + minutesId), null)
+                .andExpect(jsonPath("$.data.draftStatus").value("REQUESTED"));
+        assertThat(DRAFT_REQUESTS).hasSize(before + 1);
+        mockMvc.perform(post("/internal/admin/minutes/999999999/draft-retry")).andExpect(status().isNotFound());
+    }
+
+    @Test
     void 오늘_요약이_없으면_기다렸다가_오면_자동으로_요청한다() throws Exception {
         SOURCE_READY.set(false);
         call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":" + DEFAULT_TEMPLATE_ID + "}")
