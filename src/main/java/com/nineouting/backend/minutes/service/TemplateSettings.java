@@ -15,7 +15,9 @@ import tools.jackson.databind.json.JsonMapper;
  * <ul>
  *   <li>항목 settings: recordType(FREE / LIST / CHECKLIST / TABLE), titleSize·bodySize(px), color(#rrggbb), margin(px),
  *       table{rows, cols, autoWidth, align(LEFT / CENTER / RIGHT), border(BASIC / HORIZONTAL / OUTER / NONE), headerColor,
- *       columnNames(열 자리 순서대로 문자열, 비운 열은 "". 사용자가 정한 열 이름, AI 초안 요청에 보낸다)}</li>
+ *       columnNames(열 자리 순서대로 문자열, 비운 열은 "". 사용자가 정한 열 이름, AI 초안 요청에 보낸다),
+ *       columnWidths(열 자리 순서대로 표 폭 대비 비율(%) 숫자, 길이 = cols, 합 100. 미리보기에서 열 경계를 끌어 정한다.
+ *       회의록 PDF·Word 표의 열 너비로 쓰고, 길이가 그릴 열 수와 다르거나 0 이하 값이 있으면 같은 너비로 그린다. 없으면 같은 너비)}</li>
  *   <li>layout: showMeetingInfo, sectionGap(px), marginVerticalMm·marginHorizontalMm, align(LEFT / CENTER / RIGHT),
  *       pageNumber, header{enabled, text}, footer{enabled, text}</li>
  * </ul>
