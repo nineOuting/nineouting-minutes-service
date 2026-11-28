@@ -107,4 +107,44 @@ class ExportTest extends ApiTestSupport {
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(pdf, 0, 5, StandardCharsets.ISO_8859_1)).isEqualTo("%PDF-");
     }
+
+    @Test
+    void 표_칸은_양식_열_너비대로_Word_표로_만든다() throws Exception {
+        Long writer = newId();
+        String body = """
+                {"name":"너비 양식","items":[
+                 {"title":"안건표","settings":{"recordType":"TABLE","table":{"cols":3,"columnWidths":[20,30,50],"border":"OUTER"}}},
+                 {"title":"메모","settings":{"recordType":"FREE"}}]}""";
+        Long templateId = id(call(writer, post("/api/minutes-templates"), body), "$.data.templateId");
+        Long minutesId = finishMeeting(newId(), folder(newId(), "기획", writer), "너비 회의", LocalDateTime.of(2026, 10, 20, 10, 0),
+                writer, writer);
+        String detail = call(writer, put("/api/minutes/" + minutesId + "/template"), "{\"templateId\":%d}".formatted(templateId))
+                .andReturn().getResponse().getContentAsString();
+        List<Integer> ids = JsonPath.read(detail, "$.data.sections[*].sectionId");
+        int version = JsonPath.read(detail, "$.data.version");
+        call(writer, put("/api/minutes/" + minutesId + "/sections"), """
+                {"version":%d,"sections":[{"sectionId":%d,"title":"안건표","content":"안건\\t담당\\t기한\\n배포\\t운영\\t11/30"},
+                 {"sectionId":%d,"title":"메모","content":"메모\\t글"}]}""".formatted(version, ids.get(0), ids.get(1)))
+                .andExpect(status().isOk());
+
+        String document = docxDocument(call(writer, get("/api/minutes/" + minutesId + "/export").param("format", "DOCX"), null)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray());
+        assertThat(document).contains("<w:tbl>",
+                "<w:gridCol w:w=\"1928\"/><w:gridCol w:w=\"2891\"/><w:gridCol w:w=\"4819\"/>", "11/30");
+        assertThat(document.indexOf("<w:tbl>")).isEqualTo(document.lastIndexOf("<w:tbl>"));
+        // 표가 아닌 칸은 예전처럼 글 줄 (탭은 " | ")
+        assertThat(document).contains("메모 | 글");
+    }
+
+    private static String docxDocument(byte[] docx) throws Exception {
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(docx))) {
+            for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+                if (entry.getName().equals("word/document.xml")) {
+                    return new String(zip.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
+        }
+        throw new AssertionError("word/document.xml 없음");
+    }
 }

@@ -44,7 +44,8 @@ import org.springframework.stereotype.Service;
  * REQ-137 회의록 다운로드 (PDF / .docx). 회의록을 볼 수 있는 사람이면 받을 수 있다.
  * PDF는 한글이 깨지지 않게 나눔고딕(OFL, resources/fonts)을 넣고, 양식 설정(TemplateSettings)의 글자 크기·색·간격·여백·
  * 머릿글·바닥글·쪽 번호와 기록 방식(목록·체크리스트·표)을 따른다. 줄글 칸에 서식(REQ-194)이 있으면 PDF에 굵게, 기울임,
- * 밑줄, 목록, 정렬을 그린다. .docx는 Word가 읽는 최소 XML 묶음을 직접 만든다 (서식 없이 글만).
+ * 밑줄, 목록, 정렬을 그린다. .docx는 Word가 읽는 최소 XML 묶음을 직접 만든다. 표 칸은 Word 표로 만들어 PDF와 같은
+ * 열 너비·테두리·머리 행 색·정렬을 따르고, 나머지는 서식 없이 글만 쓴다.
  */
 @Service
 @RequiredArgsConstructor
@@ -63,6 +64,8 @@ public class MinutesExportService {
     private static final float META_SIZE = 9.5f;
     private static final float EDGE_SIZE = 8.5f;
     private static final String CELL_SEPARATOR = "\t";
+    /** Word 본문 폭: A4 너비 11906 − 좌우 여백 1134×2 (twip, 1/20pt) */
+    private static final int DOCX_BODY_TWIP = 11906 - 1134 * 2;
 
     private final MinutesService minutesService;
     private final TemplateRepository templateRepository;
@@ -75,9 +78,10 @@ public class MinutesExportService {
     public ExportFile export(Long minutesId, Long userId, ExportFormat format) {
         MinutesDetailResponse minutes = minutesService.get(minutesId, userId);
         String baseName = minutes.title().replaceAll("[\\\\/:*?\"<>|]", "_");
+        Style style = style(minutes);
         return format == ExportFormat.PDF
-                ? new ExportFile(pdf(minutes), baseName + ".pdf", "application/pdf")
-                : new ExportFile(docx(minutes), baseName + ".docx",
+                ? new ExportFile(pdf(minutes, style), baseName + ".pdf", "application/pdf")
+                : new ExportFile(docx(minutes, style), baseName + ".docx",
                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     }
 
@@ -165,8 +169,7 @@ public class MinutesExportService {
         };
     }
 
-    private byte[] pdf(MinutesDetailResponse minutes) {
-        Style style = style(minutes);
+    private static byte[] pdf(MinutesDetailResponse minutes, Style style) {
         Settings layout = style.layout();
         BaseFont regular = font("fonts/NanumGothic-Regular.ttf");
         BaseFont bold = font("fonts/NanumGothic-Bold.ttf");
@@ -382,13 +385,18 @@ public class MinutesExportService {
         }
     }
 
-    private static byte[] docx(MinutesDetailResponse minutes) {
+    private static byte[] docx(MinutesDetailResponse minutes, Style style) {
         StringBuilder body = new StringBuilder();
         body.append(paragraph(minutes.title(), true, 36));
         metaLines(minutes).forEach(line -> body.append(paragraph(line, false, 19)));
         for (SectionResponse section : minutes.sections()) {
             body.append(paragraph("", false, 21));
             body.append(paragraph(section.title(), true, 26));
+            Settings settings = style.section(section.title());
+            if (settings.text("recordType", "FREE").equals("TABLE")) {
+                body.append(docxTable(section.content(), settings.child("table")));
+                continue;
+            }
             for (String line : section.content().split("\n", -1)) {
                 body.append(paragraph(line.replace(CELL_SEPARATOR, " | "), false, 21));
             }
@@ -415,9 +423,94 @@ public class MinutesExportService {
 
     /** size는 반 포인트 단위 (21 = 10.5pt) */
     private static String paragraph(String text, boolean bold, int size) {
-        return "<w:p><w:r><w:rPr><w:rFonts w:ascii=\"맑은 고딕\" w:eastAsia=\"맑은 고딕\" w:hAnsi=\"맑은 고딕\"/>"
+        return "<w:p>" + run(text, bold, size) + "</w:p>";
+    }
+
+    private static String run(String text, boolean bold, int size) {
+        return "<w:r><w:rPr><w:rFonts w:ascii=\"맑은 고딕\" w:eastAsia=\"맑은 고딕\" w:hAnsi=\"맑은 고딕\"/>"
                 + (bold ? "<w:b/>" : "") + "<w:sz w:val=\"" + size + "\"/></w:rPr>"
-                + "<w:t xml:space=\"preserve\">" + escape(text) + "</w:t></w:r></w:p>";
+                + "<w:t xml:space=\"preserve\">" + escape(text) + "</w:t></w:r>";
+    }
+
+    /**
+     * 표 칸을 Word 표로 (SCRUM-433). 행·열 나누기, 열 너비, 테두리, 머리 행 색, 정렬은 PDF table()과 같은 규칙을 따른다.
+     * 표는 본문 폭을 꽉 채우고(고정 레이아웃), 칸 안쪽 여백은 PDF 칸 여백(4pt)과 같다
+     */
+    static String docxTable(String content, Settings settings) {
+        List<String[]> rows = tableRows(content);
+        int cols = tableCols(rows, settings);
+        int[] twips = docxColumnTwips(columnWidths(settings.raw("columnWidths"), cols), cols);
+        String border = settings.text("border", "BASIC");
+        String header = docxColor(settings.text("headerColor", "#f4f4f4"));
+        String jc = switch (settings.text("align", "LEFT")) {
+            case "CENTER" -> "center";
+            case "RIGHT" -> "right";
+            default -> "left";
+        };
+
+        StringBuilder xml = new StringBuilder("<w:tbl><w:tblPr><w:tblW w:w=\"5000\" w:type=\"pct\"/>"
+                + "<w:tblLayout w:type=\"fixed\"/><w:tblCellMar><w:top w:w=\"80\" w:type=\"dxa\"/>"
+                + "<w:left w:w=\"80\" w:type=\"dxa\"/><w:bottom w:w=\"80\" w:type=\"dxa\"/>"
+                + "<w:right w:w=\"80\" w:type=\"dxa\"/></w:tblCellMar></w:tblPr><w:tblGrid>");
+        for (int width : twips) {
+            xml.append("<w:gridCol w:w=\"").append(width).append("\"/>");
+        }
+        xml.append("</w:tblGrid>");
+        for (int r = 0; r < rows.size(); r++) {
+            xml.append("<w:tr>");
+            for (int c = 0; c < cols; c++) {
+                String text = c < rows.get(r).length ? rows.get(r)[c] : "";
+                xml.append("<w:tc><w:tcPr><w:tcW w:w=\"").append(twips[c]).append("\" w:type=\"dxa\"/>")
+                        .append(docxBorders(cellBorder(border, r, c, rows.size(), cols)));
+                if (r == 0) {
+                    xml.append("<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"").append(header).append("\"/>");
+                }
+                xml.append("</w:tcPr><w:p><w:pPr><w:jc w:val=\"").append(jc).append("\"/></w:pPr>")
+                        .append(run(text, r == 0, 21)).append("</w:p></w:tc>");
+            }
+            xml.append("</w:tr>");
+        }
+        return xml.append("</w:tbl>").toString();
+    }
+
+    /** 열 너비(%)를 본문 폭 twip으로. null이면 같은 너비. 반올림 차이는 마지막 열에 더해 합을 본문 폭에 맞춘다 */
+    static int[] docxColumnTwips(float[] widths, int cols) {
+        int[] twips = new int[cols];
+        int used = 0;
+        for (int c = 0; c < cols - 1; c++) {
+            twips[c] = Math.round(DOCX_BODY_TWIP * (widths == null ? 100f / cols : widths[c]) / 100f);
+            used += twips[c];
+        }
+        twips[cols - 1] = DOCX_BODY_TWIP - used;
+        return twips;
+    }
+
+    /** cellBorder()가 고른 변을 칸 테두리로. 선 모양은 PDF와 같은 0.5pt 회색 (w:sz는 1/8pt 단위) */
+    private static String docxBorders(int sides) {
+        if (sides == Rectangle.NO_BORDER) {
+            return "";
+        }
+        StringBuilder xml = new StringBuilder("<w:tcBorders>");
+        String line = " w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"C0C0C0\"/>";
+        // 스키마가 정한 순서: top, left, bottom, right
+        if ((sides & Rectangle.TOP) != 0) {
+            xml.append("<w:top").append(line);
+        }
+        if ((sides & Rectangle.LEFT) != 0) {
+            xml.append("<w:left").append(line);
+        }
+        if ((sides & Rectangle.BOTTOM) != 0) {
+            xml.append("<w:bottom").append(line);
+        }
+        if ((sides & Rectangle.RIGHT) != 0) {
+            xml.append("<w:right").append(line);
+        }
+        return xml.append("</w:tcBorders>").toString();
+    }
+
+    /** #rrggbb → rrggbb. 형식이 다르면 PDF 기본 머리 행 색 */
+    private static String docxColor(String hex) {
+        return hex.matches("#?[0-9a-fA-F]{6}") ? hex.replace("#", "").toUpperCase(java.util.Locale.ROOT) : "F4F4F4";
     }
 
     private static String escape(String text) {
