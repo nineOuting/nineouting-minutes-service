@@ -2,6 +2,7 @@ package com.nineouting.backend.minutes.service;
 
 import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
 import com.lowagie.text.PageSize;
@@ -105,7 +106,12 @@ public class MinutesExportService {
     }
 
     /** 설정 JSON에서 값을 꺼낸다. 없거나 형식이 다르면 기본값 */
-    private record Settings(Map<String, Object> values) {
+    record Settings(Map<String, Object> values) {
+
+        /** 형식을 정하지 않고 그대로 꺼낸다. 없으면 null */
+        Object raw(String key) {
+            return values.get(key);
+        }
 
         float number(String key, float fallback) {
             return values.get(key) instanceof Number number ? number.floatValue() : fallback;
@@ -240,15 +246,62 @@ public class MinutesExportService {
     }
 
     /** 표 칸: 줄 = 행, 탭 = 열 (회의록 작성 화면의 표 편집과 같은 형식). 첫 행은 머리 행 */
-    private static PdfPTable table(String content, Settings settings, Font body) {
+    private static List<String[]> tableRows(String content) {
         List<String[]> rows = new ArrayList<>();
         for (String line : content.split("\n")) {
             rows.add(line.split(CELL_SEPARATOR, -1));
         }
-        int cols = Math.max(1, Math.max((int) settings.number("cols", 1),
+        return rows;
+    }
+
+    /** 그릴 열 수: 양식의 열 수와 내용에서 가장 긴 행의 칸 수 중 큰 쪽 */
+    private static int tableCols(List<String[]> rows, Settings settings) {
+        return Math.max(1, Math.max((int) settings.number("cols", 1),
                 rows.stream().mapToInt(row -> row.length).max().orElse(1)));
+    }
+
+    /**
+     * 양식의 표 열 너비 (settings table.columnWidths, SCRUM-430·433). 열 순서대로 표 폭 대비 비율이고, 합이 100이 되게 고쳐
+     * 돌려준다. 배열이 아니거나, 길이가 그릴 열 수와 다르거나, 열 수가 상한을 넘거나, 0 이하·숫자가 아닌 값이 있으면 null
+     * (같은 너비로 그린다). 예전 양식과, 내용 칸 수가 양식 열 수보다 많은 표가 여기에 해당한다. PDF와 Word가 같이 쓴다
+     */
+    static float[] columnWidths(Object raw, int cols) {
+        if (!(raw instanceof List<?> list) || list.size() != cols || cols > TemplateSettings.MAX_TABLE_COLUMNS) {
+            return null;
+        }
+        double[] values = new double[cols];
+        double sum = 0;
+        for (int c = 0; c < cols; c++) {
+            if (!(list.get(c) instanceof Number number) || !(number.doubleValue() > 0)
+                    || !Double.isFinite(number.doubleValue())) {
+                return null;
+            }
+            values[c] = number.doubleValue();
+            sum += values[c];
+        }
+        if (!Double.isFinite(sum)) {
+            return null;
+        }
+        float[] widths = new float[cols];
+        for (int c = 0; c < cols; c++) {
+            widths[c] = (float) (values[c] / sum * 100);
+        }
+        return widths;
+    }
+
+    static PdfPTable table(String content, Settings settings, Font body) {
+        List<String[]> rows = tableRows(content);
+        int cols = tableCols(rows, settings);
         PdfPTable table = new PdfPTable(cols);
         table.setWidthPercentage(100f);
+        float[] widths = columnWidths(settings.raw("columnWidths"), cols);
+        if (widths != null) {
+            try {
+                table.setWidths(widths);
+            } catch (DocumentException e) {
+                // columnWidths()가 길이를 맞춰 두므로 생기지 않는다. 생기면 같은 너비 그대로 둔다
+            }
+        }
         table.setSpacingBefore(2f);
         String border = settings.text("border", "BASIC");
         Color header = color(settings.text("headerColor", "#f4f4f4"));
